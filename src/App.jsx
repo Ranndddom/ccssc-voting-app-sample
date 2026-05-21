@@ -1564,7 +1564,7 @@ function RegistryPortal({ config, addToast, user }) {
           </div>
         ) : (
           <button onClick={() => setScanning(true)} className="w-full mb-6 py-4 rounded-xl border-2 border-dashed border-[#16345f] text-[#16345f] hover:bg-slate-50 font-bold flex justify-center items-center gap-2 transition">
-            <QrCode className="w-5 h-5" />OPEN QR SCANNER
+            <QrCode className="w-5 h-5" />SCAN QR CODE
           </button>
         )}
 
