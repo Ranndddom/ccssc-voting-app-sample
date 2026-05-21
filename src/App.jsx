@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ShieldAlert, ShieldCheck, Users, CheckCircle, Clock, 
   Settings, LogOut, QrCode, Lock, UserPlus, FileText, Activity, AlertCircle, ChevronRight, X, TrendingUp,
-  Pencil, Trash2, ArrowRight
+  Pencil, Trash2, ArrowRight, BarChart3, EyeOff, Eye
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -14,7 +14,6 @@ import {
 } from 'firebase/firestore';
 
 // --- FIREBASE INITIALIZATION ---
-// NO EXTRA STEPS: Paste your exact Firebase Web Config keys here
 const defaultFirebaseConfig = {
   apiKey: "AIzaSyDeZzE7CnTar7ImNvVgcTAKmC5GztOlEd0",
   authDomain: "ccssc-voting-app.firebaseapp.com",
@@ -30,7 +29,7 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'ccssc-voting-system'; // Permanent internal path key
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'ccssc-voting-system';
 
 // --- UTILS & CONSTANTS ---
 const POSITIONS = [
@@ -48,7 +47,6 @@ const POSITION_ORDER = {
   "Grade Level Representative": 7
 };
 
-// Returns virtual representation list of categories displayed on the home page
 const getCouncilPositions = (council) => {
   const core = ["President", "Vice President", "Secretary", "Treasurer", "Auditor", "Project Manager"];
   if (council === 'JHS') {
@@ -82,13 +80,12 @@ function ToastContainer({ toasts }) {
 // --- MAIN APPLICATION COMPONENT ---
 export default function App() {
   const [user, setUser] = useState(null);
-  const [view, setView] = useState('home'); // home, admin, registry, kiosk
+  const [view, setView] = useState('home'); 
   const [clickCount, setClickCount] = useState(0);
   const [showHiddenNav, setShowHiddenNav] = useState(false);
   const [systemConfig, setSystemConfig] = useState(null);
   const [toasts, setToasts] = useState([]);
 
-  // Toast Handler
   const addToast = (msg, type = 'success') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, msg, type }]);
@@ -97,7 +94,6 @@ export default function App() {
     }, 4000);
   };
 
-  // Authentication Setup
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -117,8 +113,8 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch/Listen System Settings
   useEffect(() => {
+    if (!user) return;
     const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
     const unsubscribe = onSnapshot(configRef, async (snap) => {
       if (snap.exists()) {
@@ -134,17 +130,17 @@ export default function App() {
           startTime: 0,
           endTime: 0,
           isTransmitting: false,
-          transmissionStartTime: 0
+          transmissionStartTime: 0,
+          isResultsPublic: false // Controls public tally board visibility
         };
         await setDoc(configRef, initialConfig);
         setSystemConfig(initialConfig);
       }
-    }, (err) => console.error(err));
+    }, (err) => console.error("Config onSnapshot error: ", err));
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
-  // Hidden 5-Click Nav Logic
   useEffect(() => {
     if (clickCount >= 5) {
       setShowHiddenNav(true);
@@ -154,9 +150,8 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [clickCount]);
 
-  // Safe Fallback Config to prevent loading screen freezes
   const safeConfig = systemConfig || {
-    isElectionOpen: false, startTime: 0, endTime: 0, isTransmitting: false, transmissionStartTime: 0, adminHash: '', elecomHash: ''
+    isElectionOpen: false, startTime: 0, endTime: 0, isTransmitting: false, transmissionStartTime: 0, isResultsPublic: false, adminHash: '', elecomHash: ''
   };
 
   const isHome = view === 'home';
@@ -166,7 +161,6 @@ export default function App() {
     <div className={`min-h-screen font-sans bg-white text-slate-900`}>
       <ToastContainer toasts={toasts} />
       
-      {/* GLOBAL HEADER (Hidden in Kiosk View) */}
       {!isKiosk && (
         <header className={`${isHome ? 'bg-[#0f172a] border-none text-white' : 'bg-[#16345f] text-white'} p-4 md:px-8 flex items-center justify-between relative z-50 transition-colors`}>
           <div 
@@ -197,7 +191,6 @@ export default function App() {
         </header>
       )}
 
-      {/* HIDDEN NAV MODAL */}
       {showHiddenNav && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100]">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#c6b26c]">
@@ -220,12 +213,12 @@ export default function App() {
         </div>
       )}
 
-      {/* MAIN ROUTING */}
+      {/* Main rendering tree block (Loading screen removed, components load directly but wait gracefully for user config) */}
       <main className="w-full">
-        {view === 'home' && <PublicDashboard config={safeConfig} />}
-        {view === 'admin' && <AdminPortal config={safeConfig} addToast={addToast} />}
-        {view === 'registry' && <RegistryPortal config={safeConfig} addToast={addToast} />}
-        {view === 'kiosk' && <VotingKiosk config={safeConfig} addToast={addToast} />}
+        {view === 'home' && <PublicDashboard config={safeConfig} user={user} />}
+        {view === 'admin' && <AdminPortal config={safeConfig} addToast={addToast} user={user} />}
+        {view === 'registry' && <RegistryPortal config={safeConfig} addToast={addToast} user={user} />}
+        {view === 'kiosk' && <VotingKiosk config={safeConfig} addToast={addToast} user={user} />}
       </main>
     </div>
   );
@@ -234,31 +227,32 @@ export default function App() {
 // ============================================================================
 // 1. PUBLIC DASHBOARD
 // ============================================================================
-function PublicDashboard({ config }) {
+function PublicDashboard({ config, user }) {
   const [candidates, setCandidates] = useState([]);
   const [votersCount, setVotersCount] = useState(0);
   const [displayVotes, setDisplayVotes] = useState({});
 
   useEffect(() => {
+    if (!user) return;
     const fetchVoters = async () => {
       const vRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters');
       const snap = await getDocs(vRef);
       setVotersCount(snap.size);
     };
     fetchVoters();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
+    if (!user) return;
     const cRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates');
     const unsub = onSnapshot(cRef, (snap) => {
       const c = [];
       snap.forEach(doc => c.push({ id: doc.id, ...doc.data() }));
       setCandidates(c);
-    });
+    }, (err) => console.error("Candidates onSnapshot error: ", err));
     return () => unsub();
-  }, []);
+  }, [user]);
 
-  // 1 Student Ballot per 2 Seconds Cinematic Transmission Logic
   useEffect(() => {
     if (!config.isTransmitting) {
       const current = {};
@@ -300,7 +294,6 @@ function PublicDashboard({ config }) {
   const turnoutPercent = votersCount === 0 ? 0 : Math.round((estimatedVotersTurnout / votersCount) * 100);
 
   const renderCandidatesGroup = (council, virtualPosition) => {
-    // Dynamic virtual position filtering (separates Grade Level Representatives by actual grade level)
     const positionCandidates = candidates.filter(c => {
       if (c.council !== council) return false;
       if (virtualPosition.startsWith("Grade ") && virtualPosition.endsWith(" Representative")) {
@@ -338,7 +331,6 @@ function PublicDashboard({ config }) {
                     : 'bg-white border-slate-200 hover:border-slate-300'
                 }`}
               >
-                {/* Guaranteed Layout Separator prevents leading text and votes counter from overlapping */}
                 <div className="flex justify-between items-end gap-4 mb-3">
                   <div className="flex-1 min-w-0">
                     <div className="font-extrabold text-lg text-[#16345f] leading-snug truncate">{name}</div>
@@ -399,39 +391,41 @@ function PublicDashboard({ config }) {
         </div>
       </div>
 
-      {/* Structured grid list */}
       <div className="max-w-7xl mx-auto px-6 md:px-12 py-24 space-y-24">
-        
-        {/* JHS Section */}
-        <div>
-          <div className="flex flex-col items-center justify-center mb-12">
-            <span className="px-4 py-1.5 rounded-full bg-[#16345f]/10 text-[#16345f] text-[10px] font-black tracking-widest uppercase mb-4 border border-[#16345f]/20 shadow-sm">
-              Official Candidates
-            </span>
-            <h3 className="text-4xl md:text-5xl font-black text-[#16345f] tracking-tighter text-center">Junior High School</h3>
-            <div className="w-24 h-1.5 bg-[#c6b26c] mt-4 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {getCouncilPositions('JHS').map(pos => renderCandidatesGroup('JHS', pos))}
-          </div>
-        </div>
+        {config.isResultsPublic ? (
+          <>
+            <div>
+              <div className="flex flex-col items-center justify-center mb-12">
+                <span className="px-4 py-1.5 rounded-full bg-[#16345f]/10 text-[#16345f] text-[10px] font-black tracking-widest uppercase mb-4 border border-[#16345f]/20 shadow-sm">
+                  Official Candidates
+                </span>
+                <h3 className="text-4xl md:text-5xl font-black text-[#16345f] tracking-tighter text-center">Junior High School</h3>
+                <div className="w-24 h-1.5 bg-[#c6b26c] mt-4 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {getCouncilPositions('JHS').map(pos => renderCandidatesGroup('JHS', pos))}
+              </div>
+            </div>
 
-        {/* SHS Section */}
-        <div>
-          <div className="flex flex-col items-center justify-center mb-12">
-            <span className="px-4 py-1.5 rounded-full bg-[#16345f]/10 text-[#16345f] text-[10px] font-black tracking-widest uppercase mb-4 border border-[#16345f]/20 shadow-sm">
-              Official Candidates
-            </span>
-            <h3 className="text-4xl md:text-5xl font-black text-[#16345f] tracking-tighter text-center">Senior High School</h3>
-            <div className="w-24 h-1.5 bg-[#c6b26c] mt-4 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
+            <div>
+              <div className="flex flex-col items-center justify-center mb-12">
+                <span className="px-4 py-1.5 rounded-full bg-[#16345f]/10 text-[#16345f] text-[10px] font-black tracking-widest uppercase mb-4 border border-[#16345f]/20 shadow-sm">
+                  Official Candidates
+                </span>
+                <h3 className="text-4xl md:text-5xl font-black text-[#16345f] tracking-tighter text-center">Senior High School</h3>
+                <div className="w-24 h-1.5 bg-[#c6b26c] mt-4 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {getCouncilPositions('SHS').map(pos => renderCandidatesGroup('SHS', pos))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="max-w-3xl mx-auto bg-slate-50 border-2 border-slate-200 border-dashed rounded-3xl p-12 text-center shadow-inner">
+             <h3 className="text-3xl font-black text-[#16345f] mb-2">Tally Board Hidden</h3>
+             <p className="text-slate-500 text-lg">The election commission has temporarily disabled public access to live results. Please wait for the official announcement for the confirmed outcome. </p>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {getCouncilPositions('SHS').map(pos => renderCandidatesGroup('SHS', pos))}
-          </div>
-        </div>
-
+        )}
       </div>
     </div>
   );
@@ -504,7 +498,7 @@ function LoginScreen({ title, correctHash, onLogin }) {
 // ============================================================================
 // 2. ADMIN PORTAL
 // ============================================================================
-function AdminPortal({ config, addToast }) {
+function AdminPortal({ config, addToast, user }) {
   const [authOk, setAuthOk] = useState(false);
   const [tab, setTab] = useState('setup');
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -547,6 +541,7 @@ function AdminPortal({ config, addToast }) {
             <AdminTab id="candidates" icon={<Users/>} label="Candidates" current={tab} setTab={setTab} />
             <AdminTab id="voters" icon={<FileText/>} label="Voter Registry" current={tab} setTab={setTab} />
             <AdminTab id="transmit" icon={<Activity/>} label="Transmission" current={tab} setTab={setTab} />
+            <AdminTab id="results" icon={<BarChart3/>} label="Live Results" current={tab} setTab={setTab} />
           </nav>
         </div>
         <div className="mt-auto p-6">
@@ -559,9 +554,10 @@ function AdminPortal({ config, addToast }) {
       <main className="flex-1 p-10 overflow-y-auto">
         <div className="max-w-5xl mx-auto">
           {tab === 'setup' && <AdminSetupTab config={config} addToast={addToast} />}
-          {tab === 'candidates' && <AdminCandidatesTab addToast={addToast} />}
-          {tab === 'voters' && <AdminVotersTab />}
-          {tab === 'transmit' && <AdminTransmitTab config={config} addToast={addToast} />}
+          {tab === 'candidates' && <AdminCandidatesTab addToast={addToast} user={user} />}
+          {tab === 'voters' && <AdminVotersTab user={user} addToast={addToast} />}
+          {tab === 'transmit' && <AdminTransmitTab config={config} addToast={addToast} user={user} />}
+          {tab === 'results' && <AdminResultsTab user={user} />}
         </div>
       </main>
     </div>
@@ -575,6 +571,118 @@ function AdminTab({ id, icon, label, current, setTab }) {
       {React.cloneElement(icon, { className: "w-5 h-5" })}
       {label}
     </button>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// NEW ADMIN RESULTS TAB
+// ----------------------------------------------------------------------------
+function AdminResultsTab({ user }) {
+  const [candidates, setCandidates] = useState([]);
+  const [votersCount, setVotersCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const vRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters');
+    getDocs(vRef).then(snap => setVotersCount(snap.size)).catch(e => console.error(e));
+    
+    const cRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates');
+    const unsub = onSnapshot(cRef, snap => {
+      const arr = [];
+      snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
+      // Sort immediately by vote count descending
+      arr.sort((a,b) => (b.voteCount || 0) - (a.voteCount || 0));
+      setCandidates(arr);
+    }, err => console.error(err));
+    return () => unsub();
+  }, [user]);
+
+  const totalTransmittedVotes = candidates.reduce((sum, c) => sum + (c.voteCount || 0), 0);
+  const transmittedBallots = Math.min(votersCount, Math.ceil(totalTransmittedVotes / 7));
+  const turnout = votersCount === 0 ? 0 : Math.round((transmittedBallots / votersCount) * 100);
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-3xl font-black text-[#16345f] mb-2">Live Election Results</h2>
+        <p className="text-slate-500">Internal view of transmitted votes.</p>
+      </div>
+      
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
+           <div className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">Registered Voters</div>
+           <div className="text-4xl font-black text-[#16345f]">{votersCount.toLocaleString()}</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
+           <div className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">Transmitted Ballots</div>
+           <div className="text-4xl font-black text-[#16345f]">{transmittedBallots.toLocaleString()}</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
+           <div className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">Voter Turnout</div>
+           <div className="text-4xl font-black text-[#16345f]">{turnout}%</div>
+        </div>
+      </div>
+
+      {/* Simpler List Layout for Results */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+         
+         {/* JHS Results Table */}
+         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-[#16345f] text-white px-5 py-4 font-black tracking-widest uppercase">JHS Results</div>
+            <div className="p-0">
+              {getCouncilPositions('JHS').map(pos => {
+                const cands = candidates.filter(c => c.council === 'JHS' && (c.position === pos || (pos.includes('Grade') && c.position === 'Grade Level Representative' && pos.includes(c.gradeLevel))));
+                if(cands.length===0) return null;
+                return (
+                  <div key={pos} className="border-b border-slate-100 last:border-0 p-5">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{pos}</h4>
+                    <div className="space-y-2.5">
+                      {cands.map(c => (
+                        <div key={c.id} className="flex justify-between items-center group">
+                          <div>
+                             <span className="font-bold text-[#16345f] text-sm group-hover:text-blue-600 transition-colors">{c.lastName}, {c.firstName}</span>
+                             <span className="text-[10px] text-slate-400 ml-2 font-mono uppercase">{c.partyList || 'IND'}</span>
+                          </div>
+                          <span className="font-mono font-black text-lg bg-slate-50 border border-slate-100 px-3 py-1 rounded-lg text-[#16345f] min-w-[3rem] text-center">{c.voteCount || 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+         </div>
+         
+         {/* SHS Results Table */}
+         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-[#16345f] text-white px-5 py-4 font-black tracking-widest uppercase">SHS Results</div>
+            <div className="p-0">
+              {getCouncilPositions('SHS').map(pos => {
+                const cands = candidates.filter(c => c.council === 'SHS' && (c.position === pos || (pos.includes('Grade') && c.position === 'Grade Level Representative' && pos.includes(c.gradeLevel))));
+                if(cands.length===0) return null;
+                return (
+                  <div key={pos} className="border-b border-slate-100 last:border-0 p-5">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{pos}</h4>
+                    <div className="space-y-2.5">
+                      {cands.map(c => (
+                        <div key={c.id} className="flex justify-between items-center group">
+                          <div>
+                             <span className="font-bold text-[#16345f] text-sm group-hover:text-blue-600 transition-colors">{c.lastName}, {c.firstName}</span>
+                             <span className="text-[10px] text-slate-400 ml-2 font-mono uppercase">{c.partyList || 'IND'}</span>
+                          </div>
+                          <span className="font-mono font-black text-lg bg-slate-50 border border-slate-100 px-3 py-1 rounded-lg text-[#16345f] min-w-[3rem] text-center">{c.voteCount || 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+         </div>
+
+      </div>
+    </div>
   );
 }
 
@@ -740,23 +848,23 @@ function AdminSetupTab({ config, addToast }) {
   );
 }
 
-function AdminCandidatesTab({ addToast }) {
+function AdminCandidatesTab({ addToast, user }) {
   const [candidates, setCandidates] = useState([]);
   const [editId, setEditId] = useState(null);
-  // Custom non-alert state to handle robust inline deletion inside sandbox/iframes safely
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   
   const [form, setForm] = useState({ firstName: '', middleName: '', lastName: '', position: 'President', council: 'JHS', gradeLevel: '', partyList: '' });
 
   useEffect(() => {
+    if (!user) return;
     const cRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates');
     const unsub = onSnapshot(cRef, snap => {
       const arr = [];
       snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
       setCandidates(arr);
-    });
+    }, (err) => console.error("Candidates onSnapshot error: ", err));
     return () => unsub();
-  }, []);
+  }, [user]);
 
   const handleAddOrUpdate = async (e) => {
     e.preventDefault();
@@ -771,13 +879,11 @@ function AdminCandidatesTab({ addToast }) {
     };
 
     if (editId) {
-      // Update existing
       const cRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', editId);
       await updateDoc(cRef, newCand);
       addToast("Candidate successfully updated.", "success");
       setEditId(null);
     } else {
-      // Add new
       newCand.voteCount = 0;
       newCand.pendingVotes = 0;
       newCand.initialVoteCount = 0;
@@ -814,13 +920,11 @@ function AdminCandidatesTab({ addToast }) {
     setForm({ firstName: '', middleName: '', lastName: '', position: 'President', council: 'JHS', gradeLevel: '', partyList: '' });
   };
 
-  // Safe sorting function based on strictly ordered positions list
   const sortCandidates = (list) => {
     return [...list].sort((a, b) => {
       const orderA = POSITION_ORDER[a.position] || 99;
       const orderB = POSITION_ORDER[b.position] || 99;
       if (orderA !== orderB) return orderA - orderB;
-      // Secondary sort alphabetically
       return a.lastName.localeCompare(b.lastName);
     });
   };
@@ -989,19 +1093,25 @@ function AdminCandidatesTab({ addToast }) {
   );
 }
 
-function AdminVotersTab() {
+function AdminVotersTab({ user, addToast }) {
   const [voters, setVoters] = useState([]);
   const [search, setSearch] = useState('');
+  
+  // Edit and Delete State
+  const [editVoterId, setEditVoterId] = useState(null);
+  const [editForm, setEditForm] = useState({ id: '', grade: 7, hasVoted: false });
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   useEffect(() => {
+    if (!user) return;
     const vRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters');
     const unsub = onSnapshot(vRef, snap => {
       const arr = [];
       snap.forEach(d => arr.push(d.data()));
       setVoters(arr);
-    });
+    }, (err) => console.error("Voters onSnapshot error: ", err));
     return () => unsub();
-  }, []);
+  }, [user]);
 
   const filtered = voters.filter(v => v.id.includes(search.toUpperCase()));
 
@@ -1011,12 +1121,65 @@ function AdminVotersTab() {
     return acc;
   }, {});
 
+  // Edit Voter Handlers
+  const handleEdit = (v) => {
+    setEditVoterId(v.id);
+    setEditForm({ id: v.id, grade: v.grade, hasVoted: v.hasVoted });
+  };
+
+  const saveEdit = async (oldId) => {
+    try {
+      const isNowVoted = String(editForm.hasVoted) === 'true';
+      
+      if (editForm.id.toUpperCase() !== oldId) {
+        // If ID changed, verify it doesn't already exist to prevent overwrites
+        const newRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', editForm.id.toUpperCase());
+        const newSnap = await getDoc(newRef);
+        if (newSnap.exists()) {
+          addToast("A voter with that ID already exists.", "error");
+          return;
+        }
+        
+        // Recreate Document with new ID
+        const oldRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', oldId);
+        const oldSnap = await getDoc(oldRef);
+        
+        await setDoc(newRef, {
+          ...oldSnap.data(),
+          id: editForm.id.toUpperCase(),
+          grade: Number(editForm.grade),
+          hasVoted: isNowVoted
+        });
+        await deleteDoc(oldRef);
+      } else {
+        // Just update existing document
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', oldId);
+        await updateDoc(docRef, {
+          grade: Number(editForm.grade),
+          hasVoted: isNowVoted
+        });
+      }
+      addToast("Voter successfully updated.", "success");
+      setEditVoterId(null);
+    } catch (err) {
+      addToast("Error updating voter: " + err.message, "error");
+    }
+  };
+
+  const executeDelete = async (id) => {
+    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', id));
+    addToast("Voter successfully removed.", "success");
+    setConfirmDeleteId(null);
+  };
+
+  const cancelEdit = () => setEditVoterId(null);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-black text-[#16345f] mb-2">Voter Registry</h2>
-          <p className="text-slate-500">Monitor registered students and voting status.</p>
+          <p className="text-slate-500">Monitor registered students, edit records, and voting status.</p>
         </div>
         <div className="w-64">
           <input type="text" placeholder="Search ID..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-[#16345f] text-sm font-medium uppercase" />
@@ -1043,19 +1206,68 @@ function AdminVotersTab() {
           <div className="p-4 flex flex-col gap-3 max-h-[500px] overflow-y-auto">
             {groupedByGrade[grade].map(v => (
               <div key={v.id} className="border border-slate-200 p-4 rounded-lg flex justify-between items-center bg-slate-50 hover:bg-slate-100 transition w-full">
-                <div className="flex items-center gap-4">
-                  <div>
-                    <div className="font-bold text-[#16345f] text-lg">Student ID: {v.id}</div>
-                    <div className="text-sm text-slate-500 font-mono">Registered On: {new Date(v.registeredAt).toLocaleDateString()}</div>
+                
+                {editVoterId === v.id ? (
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 items-center mr-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Student ID</label>
+                      <input type="text" value={editForm.id} onChange={e=>setEditForm({...editForm, id: e.target.value.toUpperCase()})} className="w-full p-2 border-2 border-slate-200 rounded outline-none focus:border-[#16345f] font-mono text-sm uppercase" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Grade</label>
+                      <select value={editForm.grade} onChange={e=>setEditForm({...editForm, grade: e.target.value})} className="w-full p-2 border-2 border-slate-200 rounded outline-none focus:border-[#16345f] text-sm">
+                        {[7,8,9,10,11,12].map(g => <option key={g} value={g}>Grade {g}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</label>
+                      <select value={editForm.hasVoted} onChange={e=>setEditForm({...editForm, hasVoted: e.target.value})} className="w-full p-2 border-2 border-slate-200 rounded outline-none focus:border-[#16345f] text-sm">
+                        <option value={true}>Voted</option>
+                        <option value={false}>Pending</option>
+                      </select>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <div className="font-bold text-[#16345f] text-lg">Student ID: {v.id}</div>
+                      <div className="text-sm text-slate-500 font-mono">Registered On: {new Date(v.registeredAt).toLocaleDateString()}</div>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="flex items-center gap-2">
-                  {v.hasVoted ? (
-                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><CheckCircle className="w-4 h-4"/> Voted</span>
+                  {editVoterId === v.id ? (
+                    <div className="flex gap-2">
+                       <button onClick={() => saveEdit(v.id)} className="bg-emerald-600 text-white p-2.5 rounded-lg hover:bg-emerald-700 transition shadow-sm" title="Save">
+                         <CheckCircle className="w-4 h-4" />
+                       </button>
+                       <button onClick={cancelEdit} className="bg-slate-300 text-slate-700 p-2.5 rounded-lg hover:bg-slate-400 transition" title="Cancel">
+                         <X className="w-4 h-4" />
+                       </button>
+                    </div>
+                  ) : confirmDeleteId === v.id ? (
+                    <div className="flex items-center gap-2">
+                       <button onClick={() => executeDelete(v.id)} className="bg-red-600 text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-red-700 transition shadow-sm">Confirm</button>
+                       <button onClick={() => setConfirmDeleteId(null)} className="bg-slate-300 text-slate-700 text-xs font-bold px-3 py-2 rounded-lg hover:bg-slate-400 transition">Cancel</button>
+                    </div>
                   ) : (
-                    <span className="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><Clock className="w-4 h-4"/> Pending</span>
+                    <>
+                      {v.hasVoted ? (
+                        <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 mr-2"><CheckCircle className="w-4 h-4"/> Voted</span>
+                      ) : (
+                        <span className="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 mr-2"><Clock className="w-4 h-4"/> Pending</span>
+                      )}
+                      <button onClick={() => handleEdit(v)} className="p-2 text-slate-400 hover:text-[#16345f] hover:bg-slate-200 rounded-lg transition" title="Edit">
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => setConfirmDeleteId(v.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded-lg transition" title="Delete">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
                   )}
                 </div>
+
               </div>
             ))}
           </div>
@@ -1065,21 +1277,22 @@ function AdminVotersTab() {
   );
 }
 
-function AdminTransmitTab({ config, addToast }) {
+function AdminTransmitTab({ config, addToast, user }) {
   const [candidates, setCandidates] = useState([]);
   const [confirmTransmit, setConfirmTransmit] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [resetCode, setResetCode] = useState('');
   
   useEffect(() => {
+    if (!user) return;
     const cRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates');
     const unsub = onSnapshot(cRef, snap => {
       const arr = [];
       snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
       setCandidates(arr);
-    });
+    }, (err) => console.error("Candidates onSnapshot error: ", err));
     return () => unsub();
-  }, []);
+  }, [user]);
 
   const totalPending = candidates.reduce((sum, c) => sum + (c.pendingVotes || 0), 0);
 
@@ -1110,6 +1323,16 @@ function AdminTransmitTab({ config, addToast }) {
     addToast("Vote transmission successfully initialized.", "success");
   };
 
+  const togglePublicResults = async () => {
+    try {
+      const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
+      await updateDoc(configRef, { isResultsPublic: !config.isResultsPublic });
+      addToast(config.isResultsPublic ? "Results hidden from public tally board." : "Results successfully made public.", "success");
+    } catch (e) {
+      addToast("Failed to update visibility.", "error");
+    }
+  };
+
   const handleReset = async () => {
     if(resetCode !== 'RESET') {
        return addToast("Invalid reset code.", "error");
@@ -1118,19 +1341,16 @@ function AdminTransmitTab({ config, addToast }) {
     try {
       const batch = writeBatch(db);
       
-      // 1. Fetch and completely delete all candidate documents
       const cSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates'));
       cSnap.forEach(cDoc => {
         batch.delete(cDoc.ref);
       });
 
-      // 2. Fetch and completely delete all registered voters
       const vSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters'));
       vSnap.forEach(vDoc => {
         batch.delete(vDoc.ref);
       });
 
-      // 3. Reset system config settings to default state
       const defaultAdminHash = await hashPassword('admin2026');
       const defaultElecomHash = await hashPassword('elecom2026');
 
@@ -1143,7 +1363,8 @@ function AdminTransmitTab({ config, addToast }) {
         isElectionOpen: false,
         startTime: 0,
         endTime: 0,
-        transmissionStartTime: 0
+        transmissionStartTime: 0,
+        isResultsPublic: false
       });
 
       await batch.commit();
@@ -1188,6 +1409,24 @@ function AdminTransmitTab({ config, addToast }) {
         )}
       </div>
 
+      {/* New Public Results Toggle */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h4 className="font-bold text-[#16345f]">Public Tally Board Visibility</h4>
+          <p className="text-sm text-slate-500">Allow visitors to view the real-time vote results on the Home Page.</p>
+        </div>
+        <button 
+          onClick={togglePublicResults}
+          className={`px-6 py-3 rounded-lg font-bold shadow-sm transition whitespace-nowrap flex items-center gap-2 ${
+            config.isResultsPublic 
+              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300' 
+              : 'bg-slate-200 text-slate-700 hover:bg-slate-300 border border-slate-300'
+          }`}
+        >
+          {config.isResultsPublic ? <><Eye className="w-4 h-4"/> Public</> : <><EyeOff className="w-4 h-4"/> Hidden</>}
+        </button>
+      </div>
+
       <div className="bg-red-50 p-6 rounded-xl border border-red-200 mt-12 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h4 className="font-bold text-red-700">Danger Zone: Full Factory Reset</h4>
@@ -1217,10 +1456,31 @@ function AdminTransmitTab({ config, addToast }) {
 // ============================================================================
 // 3. REGISTRY PORTAL
 // ============================================================================
-function RegistryPortal({ config, addToast }) {
+function RegistryPortal({ config, addToast, user }) {
   const [authOk, setAuthOk] = useState(false);
   const [form, setForm] = useState({ id: '', grade: '7' });
   const [scanning, setScanning] = useState(false);
+  const lastScanned = useRef('');
+
+  // Native Web Audio API Beep Generator 
+  const playBeep = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "square";
+      osc.frequency.setValueAtTime(1000, ctx.currentTime);
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15); // Beep for 150ms
+    } catch(e) {
+      console.warn("Audio feedback not supported.");
+    }
+  };
 
   useEffect(() => {
     if(authOk && scanning) {
@@ -1246,9 +1506,15 @@ function RegistryPortal({ config, addToast }) {
     if(window.Html5QrcodeScanner) {
       const scanner = new window.Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
       scanner.render((text) => {
-        setForm(prev => ({...prev, id: text.toUpperCase()}));
-        scanner.clear();
-        setScanning(false);
+        const scannedId = text.toUpperCase();
+        
+        // Continuous scan logic: Only trigger if the QR code is different from the very last one read
+        if (lastScanned.current !== scannedId) {
+          lastScanned.current = scannedId;
+          playBeep(); // Trigger audible feedback
+          setForm(prev => ({...prev, id: scannedId}));
+          // NOTE: We no longer call scanner.clear() or setScanning(false) so it stays completely open
+        }
       }, (err) => {});
       window.html5QrcodeScanner = scanner;
     }
@@ -1256,6 +1522,7 @@ function RegistryPortal({ config, addToast }) {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (!user) return;
     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', form.id);
     const snap = await getDoc(docRef);
     if(snap.exists()) {
@@ -1268,7 +1535,9 @@ function RegistryPortal({ config, addToast }) {
       registeredAt: Date.now()
     });
     addToast("Voter registered successfully.", "success");
-    // Speed optimization: retain the currently chosen grade, only clear ID input
+    
+    // Clear current form ID, AND clear the ref so they can scan the exact same ID again if they want to
+    lastScanned.current = '';
     setForm(prev => ({ ...prev, id: '' }));
   };
 
@@ -1290,11 +1559,12 @@ function RegistryPortal({ config, addToast }) {
         {scanning ? (
           <div className="mb-6">
             <div id="reader" className="w-full bg-slate-100 rounded-lg overflow-hidden border border-slate-200"></div>
-            <button onClick={() => setScanning(false)} className="w-full mt-2 text-red-500 font-bold text-sm py-2">Cancel Scanner</button>
+            <button onClick={() => setScanning(false)} className="w-full mt-2 text-red-500 font-bold text-sm py-2">Close Scanner</button>
+            <p className="text-xs text-center text-slate-400 mt-2">Scanner stays open automatically. Beep indicates successful scan.</p>
           </div>
         ) : (
           <button onClick={() => setScanning(true)} className="w-full mb-6 py-4 rounded-xl border-2 border-dashed border-[#16345f] text-[#16345f] hover:bg-slate-50 font-bold flex justify-center items-center gap-2 transition">
-            <QrCode className="w-5 h-5" /> Scan ID Barcode
+            <QrCode className="w-5 h-5" />OPEN QR SCANNER
           </button>
         )}
 
@@ -1322,7 +1592,7 @@ function RegistryPortal({ config, addToast }) {
 // ============================================================================
 // 4. VOTING KIOSK
 // ============================================================================
-function VotingKiosk({ config, addToast }) {
+function VotingKiosk({ config, addToast, user }) {
   const [authOk, setAuthOk] = useState(false);
   const [step, setStep] = useState(1);
   const [voterData, setVoterData] = useState(null);
@@ -1336,14 +1606,15 @@ function VotingKiosk({ config, addToast }) {
   }, []);
 
   useEffect(() => {
+    if (!user) return;
     const cRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates');
     const unsub = onSnapshot(cRef, snap => {
       const arr = [];
       snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
       setCandidates(arr);
-    });
+    }, (err) => console.error("Candidates onSnapshot error: ", err));
     return () => unsub();
-  }, []);
+  }, [user]);
 
   const isTimeValid = config.isElectionOpen && currentTime >= config.startTime && currentTime <= config.endTime;
 
@@ -1379,6 +1650,7 @@ function VotingKiosk({ config, addToast }) {
   }
 
   const handleVoterAuth = async (id, grade) => {
+    if (!user) return;
     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', id);
     const snap = await getDoc(docRef);
     if(!snap.exists()) throw new Error("Voter not found in registry.");
@@ -1393,7 +1665,7 @@ function VotingKiosk({ config, addToast }) {
   };
 
   const handleSubmitVote = async () => {
-    if(!voterData) return;
+    if(!voterData || !user) return;
     try {
       const voterRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', voterData.id);
       await runTransaction(db, async (transaction) => {
@@ -1543,7 +1815,6 @@ function KioskBallot({ voter, candidates, selections, setSelections, onNext }) {
         );
       })}
       
-      {/* Premium Redesigned Review Votes Button (Flow layout, no longer floating/fixed) */}
       <div className="mt-12 flex justify-center w-full max-w-3xl mx-auto">
         <button 
           onClick={onNext} 
