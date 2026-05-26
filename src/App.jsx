@@ -423,7 +423,7 @@ function PublicDashboard({ config, user }) {
         ) : (
           <div className="max-w-3xl mx-auto bg-slate-50 border-2 border-slate-200 border-dashed rounded-3xl p-12 text-center shadow-inner">
              <h3 className="text-3xl font-black text-[#16345f] mb-2">Tally Board Hidden</h3>
-             <p className="text-slate-500 text-lg">The election commission has temporarily disabled public access to live results. Please wait for the official announcement for the confirmed outcome. </p>
+             <p className="text-slate-500 text-lg">The election commission has disabled public access to live results. Please wait for the official announcement for the confirmed outcome. </p>
           </div>
         )}
       </div>
