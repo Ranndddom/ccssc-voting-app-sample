@@ -1,4 +1,3 @@
-```react
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ShieldAlert, ShieldCheck, Users, CheckCircle, Clock, 
@@ -2221,5 +2220,3 @@ function KioskReview({ candidates, selections, onSubmit, onBack }) {
     </div>
   );
 }
-
-```
