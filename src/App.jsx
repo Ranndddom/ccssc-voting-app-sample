@@ -1692,7 +1692,7 @@ function VoterAnalyticsDashboard({ config, user, addToast }) {
               <div key={g} className="bg-white p-3 rounded border border-slate-200">
                 <div className="text-[10px] font-bold text-slate-400 uppercase mb-2">Grade {g}</div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-500 font-medium">Reg:</span>
+                  <span className="text-slate-500 font-medium">Registered:</span>
                   <span className="font-bold text-slate-800">{grVoters.length}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs mt-1">
