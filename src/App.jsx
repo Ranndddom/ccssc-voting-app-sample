@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ShieldAlert, ShieldCheck, Users, CheckCircle, Clock, 
-  Settings, LogOut, QrCode, Lock, UserPlus, FileText, Activity, AlertCircle, ChevronRight, X, TrendingUp,
-  Pencil, Trash2, ArrowRight, BarChart3, EyeOff, Eye, Award
+  Settings, LogOut, QrCode, Lock, UserPlus, FileText, Activity, AlertCircle, X, TrendingUp,
+  Pencil, Trash2, ArrowRight, BarChart3, EyeOff, Eye, StopCircle
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -132,8 +132,8 @@ export default function App() {
           isTransmitting: false,
           transmissionStartTime: 0,
           isResultsPublic: false,
-          totalStudentsCount: 1000, // Added editable total student population
-          transmittedBallotsCount: 0, // Store precise single-ballot counter
+          totalStudentsCount: 1000, 
+          transmittedBallotsCount: 0, 
           initialTransmittedBallotsCount: 0,
           targetTransmittedBallotsCount: 0
         };
@@ -171,8 +171,17 @@ export default function App() {
             className="flex items-center gap-3 cursor-pointer select-none"
             onClick={() => setClickCount(c => c + 1)}
           >
-            <div className={`w-10 h-10 border border-[#c6b26c] rounded-lg flex items-center justify-center ${isHome ? 'bg-transparent' : 'bg-[#10274a]'}`}>
-              <CheckCircle className="text-[#c6b26c] w-6 h-6" />
+            {/* Logo changed to an IMG tag with a fallback SVG to prevent broken images */}
+            <div className={`w-10 h-10 border border-[#c6b26c] rounded-lg flex items-center justify-center overflow-hidden ${isHome ? 'bg-transparent' : 'bg-white p-1'}`}>
+              <img 
+                src="logo.png" 
+                alt="Logo" 
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  e.target.onerror = null; 
+                  e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c6b26c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 11.08V12a10 10 0 1 1-5.93-9.14'/%3E%3Cpolyline points='22 4 12 14.01 9 11.01'/%3E%3C/svg%3E";
+                }}
+              />
             </div>
             <div>
               <h1 className="font-bold tracking-wider leading-tight text-white">
@@ -207,10 +216,13 @@ export default function App() {
                 <ShieldAlert className="w-5 h-5" /> Admin Portal
               </button>
               <button onClick={() => { setView('registry'); setShowHiddenNav(false); }} className="w-full text-left px-4 py-3 bg-slate-100 hover:bg-[#16345f] hover:text-white rounded-lg font-medium transition flex items-center gap-3">
-                <Users className="w-5 h-5" /> Student Analytics
+                <Users className="w-5 h-5" /> Voter Registry
               </button>
               <button onClick={() => { setView('kiosk'); setShowHiddenNav(false); }} className="w-full text-left px-4 py-3 bg-slate-100 hover:bg-[#16345f] hover:text-white rounded-lg font-medium transition flex items-center gap-3">
                 <Lock className="w-5 h-5" /> Voting Kiosk
+              </button>
+              <button onClick={() => { setView('analytics'); setShowHiddenNav(false); }} className="w-full text-left px-4 py-3 bg-slate-100 hover:bg-[#16345f] hover:text-white rounded-lg font-medium transition flex items-center gap-3">
+                <BarChart3 className="w-5 h-5" /> Voter Analytics
               </button>
             </div>
           </div>
@@ -223,6 +235,7 @@ export default function App() {
         {view === 'admin' && <AdminPortal config={safeConfig} addToast={addToast} user={user} />}
         {view === 'registry' && <RegistryPortal config={safeConfig} addToast={addToast} user={user} />}
         {view === 'kiosk' && <VotingKiosk config={safeConfig} addToast={addToast} user={user} />}
+        {view === 'analytics' && <VoterAnalyticsStandalone config={safeConfig} addToast={addToast} user={user} />}
       </main>
     </div>
   );
@@ -259,7 +272,6 @@ function PublicDashboard({ config, user }) {
     return () => unsub();
   }, [user]);
 
-  // Simulate/Animate Vote Transmission at EXACTLY 1 ballot per second
   useEffect(() => {
     if (!config.isTransmitting) {
       const current = {};
@@ -271,9 +283,8 @@ function PublicDashboard({ config, user }) {
 
     const interval = setInterval(() => {
       const elapsed = Date.now() - config.transmissionStartTime;
-      const studentBallotsTransmitted = Math.floor(elapsed / 1000); // 1 ballot per second
+      const studentBallotsTransmitted = Math.floor(elapsed / 1000); 
 
-      // Animate ballot count
       const initialBallots = config.initialTransmittedBallotsCount || 0;
       const targetBallots = config.targetTransmittedBallotsCount || 0;
       const currentBallotsAnimated = Math.min(targetBallots, initialBallots + studentBallotsTransmitted);
@@ -287,7 +298,6 @@ function PublicDashboard({ config, user }) {
         const target = c.targetVoteCount || 0;
         const diff = target - initial; 
 
-        // At 1 ballot per second, we reveal up to that point
         const revealedForCand = Math.min(studentBallotsTransmitted, diff);
         newDisplay[c.id] = initial + revealedForCand;
 
@@ -307,15 +317,12 @@ function PublicDashboard({ config, user }) {
   }, [config.isTransmitting, config.transmissionStartTime, config.transmittedBallotsCount, config.initialTransmittedBallotsCount, config.targetTransmittedBallotsCount, candidates]);
 
   const votersCount = voters.length;
-  // Use exact transmitted counter instead of estimated dividing by 7
   const transmittedBallots = animatedTransmittedCount;
   
-  // Total Voted count - based on actual students who voted
   const actualVotedStudentsCount = voters.filter(v => v.hasVoted).length;
   
-  // Turnout Percentage based on actual students who voted vs total population capacity
-  const totalStudents = config.totalStudentsCount || 1000;
-  const turnoutPercent = totalStudents === 0 ? 0 : Math.round((actualVotedStudentsCount / totalStudents) * 100);
+  // Revised Voter Turnout mechanics: % of transmission finished compared to voted ballots
+  const turnoutPercent = actualVotedStudentsCount === 0 ? 0 : Math.round((transmittedBallots / actualVotedStudentsCount) * 100);
 
   const renderCandidatesGroup = (council, virtualPosition) => {
     const positionCandidates = candidates.filter(c => {
@@ -402,7 +409,7 @@ function PublicDashboard({ config, user }) {
           </div>
           <h2 className="text-5xl md:text-7xl font-black tracking-tight mb-4 text-white">Official Tally Board</h2>
           <p className="text-slate-400 text-lg md:text-xl max-w-2xl leading-relaxed">
-            Real-time election results synchronization. Showing all successfully transmitted and verified student ballots. (Speed: 1 ballot / second)
+            Real-time election results synchronization. Showing all successfully transmitted and verified student ballots.
           </p>
         </div>
       </div>
@@ -411,7 +418,7 @@ function PublicDashboard({ config, user }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <MetricCard icon={<Users className="w-6 h-6 text-[#60a5fa]"/>} title="REGISTERED VOTERS" value={votersCount.toLocaleString()} />
           <MetricCard icon={<CheckCircle className="w-6 h-6 text-[#34d399]"/>} title="TRANSMITTED BALLOTS" value={transmittedBallots.toLocaleString()} />
-          <MetricCard title="VOTER TURNOUT" value={`${turnoutPercent}%`} progress={turnoutPercent} />
+          <MetricCard title="TRANSMISSION %" value={`${turnoutPercent}%`} progress={turnoutPercent} />
         </div>
       </div>
 
@@ -563,7 +570,6 @@ function AdminPortal({ config, addToast, user }) {
           <nav className="space-y-2">
             <AdminTab id="setup" icon={<Settings/>} label="Election Setup" current={tab} setTab={setTab} />
             <AdminTab id="candidates" icon={<Users/>} label="Candidates" current={tab} setTab={setTab} />
-            <AdminTab id="voters" icon={<FileText/>} label="Student Analytics" current={tab} setTab={setTab} />
             <AdminTab id="transmit" icon={<Activity/>} label="Transmission" current={tab} setTab={setTab} />
             <AdminTab id="results" icon={<BarChart3/>} label="Live Results" current={tab} setTab={setTab} />
           </nav>
@@ -579,7 +585,6 @@ function AdminPortal({ config, addToast, user }) {
         <div className="max-w-5xl mx-auto">
           {tab === 'setup' && <AdminSetupTab config={config} addToast={addToast} />}
           {tab === 'candidates' && <AdminCandidatesTab addToast={addToast} user={user} />}
-          {tab === 'voters' && <AdminVotersTab user={user} config={config} addToast={addToast} />}
           {tab === 'transmit' && <AdminTransmitTab config={config} addToast={addToast} user={user} />}
           {tab === 'results' && <AdminResultsTab user={user} config={config} />}
         </div>
@@ -599,146 +604,38 @@ function AdminTab({ id, icon, label, current, setTab }) {
 }
 
 // ----------------------------------------------------------------------------
-// ADMIN RESULTS TAB (Includes real-time simulation delay at 0.5s/ballot & winner highlights)
+// ADMIN RESULTS TAB 
 // ----------------------------------------------------------------------------
 function AdminResultsTab({ user, config }) {
   const [candidates, setCandidates] = useState([]);
-  const [voters, setVoters] = useState([]);
-  const [simulatedVotes, setSimulatedVotes] = useState({});
-  const [simulating, setSimulating] = useState(false);
-  const [simTime, setSimTime] = useState(0);
+  const [votersCount, setVotersCount] = useState(0);
 
   useEffect(() => {
     if (!user) return;
     const vRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters');
-    getDocs(vRef).then(snap => {
-      const arr = [];
-      snap.forEach(d => arr.push(d.data()));
-      setVoters(arr);
-    }).catch(e => console.error(e));
+    getDocs(vRef).then(snap => setVotersCount(snap.size)).catch(e => console.error(e));
 
     const cRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates');
     const unsub = onSnapshot(cRef, snap => {
       const arr = [];
       snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
+      arr.sort((a,b) => (b.voteCount || 0) - (a.voteCount || 0));
       setCandidates(arr);
     }, err => console.error(err));
     return () => unsub();
   }, [user]);
 
-  // Set default raw votes when not simulating
-  useEffect(() => {
-    if (!simulating) {
-      const initial = {};
-      candidates.forEach(c => {
-        initial[c.id] = c.voteCount || 0;
-      });
-      setSimulatedVotes(initial);
-    }
-  }, [candidates, simulating]);
-
-  // Handle simulation process: 0.5 seconds per ballot
-  useEffect(() => {
-    if (!simulating) return;
-
-    const interval = setInterval(() => {
-      setSimTime(prev => {
-        const nextTime = prev + 1;
-        const tempVotes = {};
-        let allCompleted = true;
-
-        candidates.forEach(c => {
-          // Candidates have an initial vote count prior to the last transmission, and a final voteCount
-          const initial = c.initialVoteCount || 0;
-          const target = c.voteCount || 0;
-          const difference = target - initial;
-
-          // Scale factor is 0.5s per ballot (which equates to 2 ballots per simulated second)
-          const stepsCompleted = nextTime * 2;
-          const currentProgress = Math.min(difference, stepsCompleted);
-          tempVotes[c.id] = initial + currentProgress;
-
-          if (currentProgress < difference) {
-            allCompleted = false;
-          }
-        });
-
-        setSimulatedVotes(tempVotes);
-
-        if (allCompleted) {
-          clearInterval(interval);
-          setSimulating(false);
-        }
-        return nextTime;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [simulating, candidates]);
-
-  const handleStartSimulation = () => {
-    setSimTime(0);
-    setSimulating(true);
-  };
-
-  const votersCount = voters.length;
   const transmittedBallots = config.transmittedBallotsCount || 0;
-  const totalStudents = config.totalStudentsCount || 1000;
-  
-  // Turnout is based on actual students who voted
-  const actualVotedStudentsCount = voters.filter(v => v.hasVoted).length;
-  const turnout = totalStudents === 0 ? 0 : Math.round((actualVotedStudentsCount / totalStudents) * 100);
-
-  const getLeaderForPosition = (council, virtualPosition) => {
-    const posCandidates = candidates.filter(c => {
-      if (c.council !== council) return false;
-      if (virtualPosition.startsWith("Grade ") && virtualPosition.endsWith(" Representative")) {
-        const grade = parseInt(virtualPosition.split(" ")[1], 10);
-        return c.position === "Grade Level Representative" && c.gradeLevel === grade;
-      }
-      return c.position === virtualPosition;
-    });
-
-    if (posCandidates.length === 0) return null;
-    let highest = -1;
-    let leaderId = null;
-
-    posCandidates.forEach(c => {
-      const votes = simulatedVotes[c.id] || 0;
-      if (votes > highest) {
-        highest = votes;
-        leaderId = c.id;
-      } else if (votes === highest && votes > 0) {
-        // TIE
-        leaderId = 'tie';
-      }
-    });
-
-    return { leaderId, highest };
-  };
+  const turnout = votersCount === 0 ? 0 : Math.round((transmittedBallots / votersCount) * 100);
 
   return (
     <div className="space-y-8 font-sans">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-black text-[#16345f] mb-2">Live Election Results</h2>
-          <p className="text-slate-500">Internal view of transmitted votes. Includes a delayed transmission simulation player.</p>
-        </div>
-        <button 
-          onClick={handleStartSimulation} 
-          disabled={simulating}
-          className={`px-5 py-3 rounded-lg font-bold text-sm shadow-md transition-all ${simulating ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-[#16345f] hover:bg-[#0b1a30] text-white'}`}
-        >
-          {simulating ? `Simulating (${simTime}s)...` : "Run Display Simulation"}
-        </button>
+      <div>
+        <h2 className="text-3xl font-black text-[#16345f] mb-2">Live Election Results</h2>
+        <p className="text-slate-500">Internal view of currently transmitted votes in the database.</p>
       </div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
-           <div className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">Total Capacity</div>
-           <div className="text-4xl font-black text-[#16345f]">{totalStudents.toLocaleString()}</div>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
            <div className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">Registered Voters</div>
            <div className="text-4xl font-black text-[#16345f]">{votersCount.toLocaleString()}</div>
@@ -748,47 +645,31 @@ function AdminResultsTab({ user, config }) {
            <div className="text-4xl font-black text-[#16345f]">{transmittedBallots.toLocaleString()}</div>
         </div>
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
-           <div className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">Voter Turnout</div>
+           <div className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">Transmission %</div>
            <div className="text-4xl font-black text-[#16345f]">{turnout}%</div>
         </div>
       </div>
 
-      {/* Simpler List Layout for Results */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-
-         {/* JHS Results Table */}
          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="bg-[#16345f] text-white px-5 py-4 font-black tracking-widest uppercase flex justify-between items-center">
-              <span>JHS Results</span>
-              {simulating && <span className="text-[10px] bg-[#c6b26c] text-[#16345f] px-2 py-0.5 rounded font-bold animate-pulse">SIMULATION PLAYING</span>}
-            </div>
+            <div className="bg-[#16345f] text-white px-5 py-4 font-black tracking-widest uppercase">JHS Results</div>
             <div className="p-0">
               {getCouncilPositions('JHS').map(pos => {
                 const cands = candidates.filter(c => c.council === 'JHS' && (c.position === pos || (pos.includes('Grade') && c.position === 'Grade Level Representative' && pos.includes(c.gradeLevel))));
                 if(cands.length===0) return null;
-                const leaderInfo = getLeaderForPosition('JHS', pos);
                 return (
                   <div key={pos} className="border-b border-slate-100 last:border-0 p-5">
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{pos}</h4>
                     <div className="space-y-2.5">
-                      {cands.map(c => {
-                        const votes = simulatedVotes[c.id] || 0;
-                        const isLeading = leaderInfo && leaderInfo.leaderId === c.id && votes > 0;
-                        return (
-                          <div key={c.id} className={`flex justify-between items-center group p-2 rounded-lg transition-colors ${isLeading ? 'bg-emerald-50 border border-emerald-200/50' : 'hover:bg-slate-50'}`}>
-                            <div className="flex items-center gap-2">
-                               <span className={`font-bold text-sm ${isLeading ? 'text-emerald-800' : 'text-[#16345f] group-hover:text-blue-600'}`}>{c.lastName}, {c.firstName}</span>
-                               <span className="text-[10px] text-slate-400 font-mono uppercase">{c.partyList || 'IND'}</span>
-                               {isLeading && (
-                                 <span className="bg-emerald-100 text-emerald-800 text-[9px] px-1.5 py-0.5 rounded font-extrabold flex items-center gap-1">
-                                   <Award className="w-2.5 h-2.5" /> LEADER
-                                 </span>
-                               )}
-                            </div>
-                            <span className={`font-mono font-black text-lg px-3 py-1 rounded-lg min-w-[3rem] text-center ${isLeading ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-50 border border-slate-100 text-[#16345f]'}`}>{votes}</span>
+                      {cands.map(c => (
+                        <div key={c.id} className="flex justify-between items-center group">
+                          <div>
+                             <span className="font-bold text-[#16345f] text-sm group-hover:text-blue-600 transition-colors">{c.lastName}, {c.firstName}</span>
+                             <span className="text-[10px] text-slate-400 ml-2 font-mono uppercase">{c.partyList || 'IND'}</span>
                           </div>
-                        );
-                      })}
+                          <span className="font-mono font-black text-lg bg-slate-50 border border-slate-100 px-3 py-1 rounded-lg text-[#16345f] min-w-[3rem] text-center">{c.voteCount || 0}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )
@@ -796,46 +677,31 @@ function AdminResultsTab({ user, config }) {
             </div>
          </div>
 
-         {/* SHS Results Table */}
          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="bg-[#16345f] text-white px-5 py-4 font-black tracking-widest uppercase flex justify-between items-center">
-              <span>SHS Results</span>
-              {simulating && <span className="text-[10px] bg-[#c6b26c] text-[#16345f] px-2 py-0.5 rounded font-bold animate-pulse">SIMULATION PLAYING</span>}
-            </div>
+            <div className="bg-[#16345f] text-white px-5 py-4 font-black tracking-widest uppercase">SHS Results</div>
             <div className="p-0">
               {getCouncilPositions('SHS').map(pos => {
                 const cands = candidates.filter(c => c.council === 'SHS' && (c.position === pos || (pos.includes('Grade') && c.position === 'Grade Level Representative' && pos.includes(c.gradeLevel))));
                 if(cands.length===0) return null;
-                const leaderInfo = getLeaderForPosition('SHS', pos);
                 return (
                   <div key={pos} className="border-b border-slate-100 last:border-0 p-5">
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{pos}</h4>
                     <div className="space-y-2.5">
-                      {cands.map(c => {
-                        const votes = simulatedVotes[c.id] || 0;
-                        const isLeading = leaderInfo && leaderInfo.leaderId === c.id && votes > 0;
-                        return (
-                          <div key={c.id} className={`flex justify-between items-center group p-2 rounded-lg transition-colors ${isLeading ? 'bg-emerald-50 border border-emerald-200/50' : 'hover:bg-slate-50'}`}>
-                            <div className="flex items-center gap-2">
-                               <span className={`font-bold text-sm ${isLeading ? 'text-emerald-800' : 'text-[#16345f] group-hover:text-blue-600'}`}>{c.lastName}, {c.firstName}</span>
-                               <span className="text-[10px] text-slate-400 font-mono uppercase">{c.partyList || 'IND'}</span>
-                               {isLeading && (
-                                 <span className="bg-emerald-100 text-emerald-800 text-[9px] px-1.5 py-0.5 rounded font-extrabold flex items-center gap-1">
-                                   <Award className="w-2.5 h-2.5" /> LEADER
-                                 </span>
-                               )}
-                            </div>
-                            <span className={`font-mono font-black text-lg px-3 py-1 rounded-lg min-w-[3rem] text-center ${isLeading ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-50 border border-slate-100 text-[#16345f]'}`}>{votes}</span>
+                      {cands.map(c => (
+                        <div key={c.id} className="flex justify-between items-center group">
+                          <div>
+                             <span className="font-bold text-[#16345f] text-sm group-hover:text-blue-600 transition-colors">{c.lastName}, {c.firstName}</span>
+                             <span className="text-[10px] text-slate-400 ml-2 font-mono uppercase">{c.partyList || 'IND'}</span>
                           </div>
-                        );
-                      })}
+                          <span className="font-mono font-black text-lg bg-slate-50 border border-slate-100 px-3 py-1 rounded-lg text-[#16345f] min-w-[3rem] text-center">{c.voteCount || 0}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )
               })}
             </div>
          </div>
-
       </div>
     </div>
   );
@@ -1149,7 +1015,6 @@ function AdminCandidatesTab({ addToast, user }) {
         </div>
       </form>
 
-      {/* --- SEPARATE DIV FOR JHS CANDIDATES --- */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="bg-[#16345f] px-6 py-4">
           <h3 className="font-extrabold text-white text-lg">Junior High School Candidates</h3>
@@ -1197,7 +1062,6 @@ function AdminCandidatesTab({ addToast, user }) {
         </table>
       </div>
 
-      {/* --- SEPARATE DIV FOR SHS CANDIDATES --- */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="bg-[#16345f] px-6 py-4">
           <h3 className="font-extrabold text-white text-lg">Senior High School Candidates</h3>
@@ -1248,291 +1112,6 @@ function AdminCandidatesTab({ addToast, user }) {
   );
 }
 
-// ----------------------------------------------------------------------------
-// STUDENT ANALYTICS TAB (Replaces Voter Registry with detailed telemetry)
-// ----------------------------------------------------------------------------
-function AdminVotersTab({ user, config, addToast }) {
-  const [voters, setVoters] = useState([]);
-  const [search, setSearch] = useState('');
-  const [editingCapacity, setEditingCapacity] = useState(false);
-  const [capacityInput, setCapacityInput] = useState(config.totalStudentsCount || 1000);
-
-  // Edit and Delete State
-  const [editVoterId, setEditVoterId] = useState(null);
-  const [editForm, setEditForm] = useState({ id: '', grade: 7, hasVoted: false, isTransmitted: false });
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-
-  useEffect(() => {
-    if (!user) return;
-    const vRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters');
-    const unsub = onSnapshot(vRef, snap => {
-      const arr = [];
-      snap.forEach(d => arr.push(d.data()));
-      setVoters(arr);
-    }, (err) => console.error("Voters onSnapshot error: ", err));
-    return () => unsub();
-  }, [user]);
-
-  const filtered = voters.filter(v => v.id.includes(search.toUpperCase()));
-
-  const groupedByGrade = filtered.reduce((acc, v) => {
-    acc[v.grade] = acc[v.grade] || [];
-    acc[v.grade].push(v);
-    return acc;
-  }, {});
-
-  // Update total student population capacity
-  const saveCapacity = async () => {
-    try {
-      const val = Number(capacityInput);
-      if (isNaN(val) || val <= 0) {
-        addToast("Please enter a valid number.", "error");
-        return;
-      }
-      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
-      await updateDoc(ref, { totalStudentsCount: val });
-      addToast("Total student capacity updated successfully.", "success");
-      setEditingCapacity(false);
-    } catch (e) {
-      addToast("Error updating capacity.", "error");
-    }
-  };
-
-  // Edit Voter Handlers
-  const handleEdit = (v) => {
-    setEditVoterId(v.id);
-    setEditForm({ id: v.id, grade: v.grade, hasVoted: v.hasVoted, isTransmitted: v.isTransmitted || false });
-  };
-
-  const saveEdit = async (oldId) => {
-    try {
-      const isNowVoted = String(editForm.hasVoted) === 'true';
-      const isNowTransmitted = String(editForm.isTransmitted) === 'true';
-
-      if (editForm.id.toUpperCase() !== oldId) {
-        // Verify unique
-        const newRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', editForm.id.toUpperCase());
-        const newSnap = await getDoc(newRef);
-        if (newSnap.exists()) {
-          addToast("A voter with that ID already exists.", "error");
-          return;
-        }
-
-        const oldRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', oldId);
-        const oldSnap = await getDoc(oldRef);
-
-        await setDoc(newRef, {
-          ...oldSnap.data(),
-          id: editForm.id.toUpperCase(),
-          grade: Number(editForm.grade),
-          hasVoted: isNowVoted,
-          isTransmitted: isNowTransmitted
-        });
-        await deleteDoc(oldRef);
-      } else {
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', oldId);
-        await updateDoc(docRef, {
-          grade: Number(editForm.grade),
-          hasVoted: isNowVoted,
-          isTransmitted: isNowTransmitted
-        });
-      }
-      addToast("Voter successfully updated.", "success");
-      setEditVoterId(null);
-    } catch (err) {
-      addToast("Error updating voter: " + err.message, "error");
-    }
-  };
-
-  const executeDelete = async (id) => {
-    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', id));
-    addToast("Voter successfully removed.", "success");
-    setConfirmDeleteId(null);
-  };
-
-  const cancelEdit = () => setEditVoterId(null);
-
-  // Computations for telemetry
-  const totalStudents = config.totalStudentsCount || 1000;
-  const totalRegistered = voters.length;
-  const registrationProgressPercent = totalStudents === 0 ? 0 : Math.round((totalRegistered / totalStudents) * 100);
-
-  // Voted status is exact number of students where hasVoted is true
-  const votedCount = voters.filter(v => v.hasVoted).length;
-  const transmittedCount = config.transmittedBallotsCount || 0;
-  const turnoutPercent = totalStudents === 0 ? 0 : Math.round((votedCount / totalStudents) * 100);
-
-  return (
-    <div className="space-y-6 font-sans">
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-3xl font-black text-[#16345f] mb-2">Student Analytics</h2>
-          <p className="text-slate-500">Monitor school-wide demographics, total registration, and live turnout metrics.</p>
-        </div>
-        <div className="w-64">
-          <input type="text" placeholder="Search ID..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-[#16345f] text-sm font-medium uppercase font-mono" />
-        </div>
-      </div>
-
-      {/* Analytics Telemetry Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 bg-[#0f172a] text-white p-6 rounded-2xl border border-slate-800 shadow-xl">
-        <div className="flex flex-col justify-center">
-          <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total Capacity</div>
-          {editingCapacity ? (
-            <div className="flex gap-2 mt-1">
-              <input 
-                type="number" 
-                value={capacityInput} 
-                onChange={e=>setCapacityInput(e.target.value)}
-                className="bg-slate-800 text-white font-mono font-bold p-1 rounded w-24 border border-slate-700 text-lg outline-none"
-              />
-              <button onClick={saveCapacity} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-2 rounded font-bold">Save</button>
-              <button onClick={() => setEditingCapacity(false)} className="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 rounded">Cancel</button>
-            </div>
-          ) : (
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black">{totalStudents.toLocaleString()}</span>
-              <button onClick={() => { setCapacityInput(totalStudents); setEditingCapacity(true); }} className="text-slate-400 hover:text-[#c6b26c] text-[10px] uppercase tracking-wider font-extrabold underline">Change</button>
-            </div>
-          )}
-        </div>
-        <div className="flex flex-col justify-center">
-          <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Registered Voters</div>
-          <span className="text-3xl font-black text-[#60a5fa]">{totalRegistered.toLocaleString()}</span>
-        </div>
-        <div className="flex flex-col justify-center">
-          <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Transmitted Ballots</div>
-          <span className="text-3xl font-black text-emerald-400">{transmittedCount.toLocaleString()}</span>
-        </div>
-        <div className="flex flex-col justify-center">
-          <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Voted (Kiosk Total)</div>
-          <span className="text-3xl font-black text-[#c6b26c]">{votedCount.toLocaleString()}</span>
-        </div>
-      </div>
-
-      {/* Progress Bars Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-        <div>
-          <div className="flex justify-between items-end mb-2">
-             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Registration Rate (Registered vs Capacity)</div>
-             <div className="text-sm font-black text-[#16345f]">{registrationProgressPercent}%</div>
-          </div>
-          <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, registrationProgressPercent)}%` }} />
-          </div>
-        </div>
-        <div>
-          <div className="flex justify-between items-end mb-2">
-             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Turnout Rate (Voted vs Capacity)</div>
-             <div className="text-sm font-black text-[#16345f]">{turnoutPercent}%</div>
-          </div>
-          <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, turnoutPercent)}%` }} />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
-        {[7, 8, 9, 10, 11, 12].map(g => (
-          <div key={g} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 text-center">
-            <div className="text-xs font-bold text-slate-400 uppercase">Grade {g}</div>
-            <div className="text-2xl font-black text-[#16345f]">
-              {voters.filter(v => v.grade === g).length}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {Object.keys(groupedByGrade).sort((a,b)=>a-b).map(grade => (
-        <div key={grade} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="bg-[#16345f] text-white px-4 py-3 font-bold tracking-widest text-sm flex justify-between items-center">
-            <span>GRADE {grade}</span>
-            <span className="bg-[#10274a] px-3 py-1 rounded-full text-xs">{groupedByGrade[grade].length} Registered</span>
-          </div>
-          <div className="p-4 flex flex-col gap-3 max-h-[500px] overflow-y-auto">
-            {groupedByGrade[grade].map(v => (
-              <div key={v.id} className="border border-slate-200 p-4 rounded-lg flex justify-between items-center bg-slate-50 hover:bg-slate-100 transition w-full">
-
-                {editVoterId === v.id ? (
-                  <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 items-center mr-4">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Student ID</label>
-                      <input type="text" value={editForm.id} onChange={e=>setEditForm({...editForm, id: e.target.value.toUpperCase()})} className="w-full p-2 border-2 border-slate-200 rounded outline-none focus:border-[#16345f] font-mono text-sm uppercase" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Grade</label>
-                      <select value={editForm.grade} onChange={e=>setEditForm({...editForm, grade: e.target.value})} className="w-full p-2 border-2 border-slate-200 rounded outline-none focus:border-[#16345f] text-sm">
-                        {[7,8,9,10,11,12].map(g => <option key={g} value={g}>Grade {g}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</label>
-                      <select value={editForm.hasVoted} onChange={e=>setEditForm({...editForm, hasVoted: e.target.value})} className="w-full p-2 border-2 border-slate-200 rounded outline-none focus:border-[#16345f] text-sm">
-                        <option value={true}>Voted</option>
-                        <option value={false}>Pending</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Transmitted</label>
-                      <select value={editForm.isTransmitted} onChange={e=>setEditForm({...editForm, isTransmitted: e.target.value})} className="w-full p-2 border-2 border-slate-200 rounded outline-none focus:border-[#16345f] text-sm">
-                        <option value={true}>Transmitted</option>
-                        <option value={false}>No</option>
-                      </select>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-4">
-                    <div>
-                      <div className="font-bold text-[#16345f] text-lg font-mono">Student ID: {v.id}</div>
-                      <div className="text-xs text-slate-500 font-mono">Registered On: {new Date(v.registeredAt).toLocaleDateString()}</div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2">
-                  {editVoterId === v.id ? (
-                    <div className="flex gap-2">
-                       <button onClick={() => saveEdit(v.id)} className="bg-emerald-600 text-white p-2.5 rounded-lg hover:bg-emerald-700 transition shadow-sm" title="Save">
-                         <CheckCircle className="w-4 h-4" />
-                       </button>
-                       <button onClick={cancelEdit} className="bg-slate-300 text-slate-700 p-2.5 rounded-lg hover:bg-slate-400 transition" title="Cancel">
-                         <X className="w-4 h-4" />
-                       </button>
-                    </div>
-                  ) : confirmDeleteId === v.id ? (
-                    <div className="flex items-center gap-2">
-                       <button onClick={() => executeDelete(v.id)} className="bg-red-600 text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-red-700 transition shadow-sm">Confirm</button>
-                       <button onClick={() => setConfirmDeleteId(null)} className="bg-slate-300 text-slate-700 text-xs font-bold px-3 py-2 rounded-lg hover:bg-slate-400 transition">Cancel</button>
-                    </div>
-                  ) : (
-                    <>
-                      {v.hasVoted ? (
-                        <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 mr-2"><CheckCircle className="w-4 h-4"/> Voted</span>
-                      ) : (
-                        <span className="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 mr-2"><Clock className="w-4 h-4"/> Pending</span>
-                      )}
-                      {v.isTransmitted ? (
-                        <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold mr-2">Transmitted</span>
-                      ) : null}
-                      <button onClick={() => handleEdit(v)} className="p-2 text-slate-400 hover:text-[#16345f] hover:bg-slate-200 rounded-lg transition" title="Edit">
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => setConfirmDeleteId(v.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded-lg transition" title="Delete">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </>
-                  )}
-                </div>
-
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function AdminTransmitTab({ config, addToast, user }) {
   const [candidates, setCandidates] = useState([]);
   const [voters, setVoters] = useState([]);
@@ -1562,28 +1141,32 @@ function AdminTransmitTab({ config, addToast, user }) {
     return () => unsub();
   }, [user]);
 
-  // Voted but untransmitted voters are those where hasVoted is true but isTransmitted is falsy
-  const pendingVoterBallots = voters.filter(v => v.hasVoted && !v.isTransmitted);
-  const totalPendingBallots = pendingVoterBallots.length;
+  // Telemetry computation
+  const votedCount = voters.filter(v => v.hasVoted).length;
+  const transmittedCount = config.transmittedBallotsCount || 0;
+  const totalPendingBallots = Math.max(0, votedCount - transmittedCount);
+
+  // Derive finish status of active transmission
+  const elapsed = Date.now() - config.transmissionStartTime;
+  const transmittedNow = Math.floor(elapsed / 1000);
+  const targetTransmission = config.targetTransmittedBallotsCount || 0;
+  const initialTransmission = config.initialTransmittedBallotsCount || 0;
+  const isFinished = transmittedNow >= (targetTransmission - initialTransmission);
 
   const handleTransmit = async () => {
     if(totalPendingBallots === 0) return addToast("No pending ballots to transmit.", "error");
 
     const batch = writeBatch(db);
     const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
-    
-    const initialCount = config.transmittedBallotsCount || 0;
-    const targetCount = initialCount + totalPendingBallots;
 
     batch.update(configRef, {
       isTransmitting: true,
       transmissionStartTime: Date.now(),
-      initialTransmittedBallotsCount: initialCount,
-      targetTransmittedBallotsCount: targetCount,
-      transmittedBallotsCount: targetCount
+      initialTransmittedBallotsCount: transmittedCount,
+      targetTransmittedBallotsCount: votedCount,
+      transmittedBallotsCount: votedCount
     });
 
-    // Save vote modifications
     candidates.forEach(c => {
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', c.id);
       const current = c.voteCount || 0;
@@ -1596,15 +1179,40 @@ function AdminTransmitTab({ config, addToast, user }) {
       });
     });
 
-    // Mark pending voters as transmitted
-    pendingVoterBallots.forEach(v => {
-      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', v.id);
-      batch.update(ref, { isTransmitted: true });
-    });
-
     await batch.commit();
     setConfirmTransmit(false);
     addToast("Vote transmission successfully initialized at 1 ballot per second.", "success");
+  };
+
+  const handleStopTransmission = async () => {
+    const batch = writeBatch(db);
+    const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
+    
+    const newTransmittedCount = Math.min(targetTransmission, initialTransmission + transmittedNow);
+    
+    batch.update(configRef, {
+      isTransmitting: false,
+      transmittedBallotsCount: newTransmittedCount,
+      targetTransmittedBallotsCount: newTransmittedCount
+    });
+    
+    candidates.forEach(c => {
+      const diff = (c.targetVoteCount || 0) - (c.initialVoteCount || 0);
+      const revealed = Math.min(transmittedNow, diff);
+      const currentVote = (c.initialVoteCount || 0) + revealed;
+      const remaining = diff - revealed;
+      
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', c.id);
+      batch.update(ref, {
+        voteCount: currentVote,
+        targetVoteCount: currentVote,
+        initialVoteCount: currentVote,
+        pendingVotes: remaining
+      });
+    });
+    
+    await batch.commit();
+    addToast("Transmission stopped successfully.", "success");
   };
 
   const togglePublicResults = async () => {
@@ -1678,20 +1286,31 @@ function AdminTransmitTab({ config, addToast, user }) {
         <div className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-8">Pending Student Ballots to Transmit</div>
 
         <p className="text-xs text-slate-500 max-w-md mx-auto mb-6">
-          * Note: Votes are calculated strictly on a 1 ballot per student basis (not per candidate position). Abstains will not show up in the candidates' tally.
+          * Note: Votes are calculated strictly on a 1 ballot per student basis (not per candidate position).
         </p>
 
-        {!confirmTransmit ? (
+        {config.isTransmitting && isFinished ? (
+           <div className="w-full max-w-md mx-auto block py-4 rounded-xl font-bold uppercase tracking-widest bg-emerald-100 text-emerald-700 border border-emerald-300 flex justify-center items-center gap-2">
+             <CheckCircle className="w-5 h-5"/> Vote Transmitted
+           </div>
+        ) : config.isTransmitting ? (
+           <button 
+             onClick={handleStopTransmission}
+             className="w-full max-w-md mx-auto py-4 rounded-xl font-bold uppercase tracking-widest transition-all bg-red-600 hover:bg-red-700 text-white shadow-xl flex justify-center items-center gap-2"
+           >
+             <StopCircle className="w-5 h-5"/> Stop Vote Transmission
+           </button>
+        ) : !confirmTransmit ? (
           <button 
             onClick={() => setConfirmTransmit(true)}
-            disabled={totalPendingBallots === 0 || config.isTransmitting}
+            disabled={totalPendingBallots === 0}
             className={`w-full max-w-md mx-auto block py-4 rounded-xl font-bold uppercase tracking-widest transition-all ${
-              totalPendingBallots > 0 && !config.isTransmitting 
+              totalPendingBallots > 0 
                 ? 'bg-[#16345f] text-white hover:bg-[#0b1a30] shadow-xl hover:-translate-y-1' 
                 : 'bg-slate-100 text-slate-400 cursor-not-allowed'
             }`}
           >
-            {config.isTransmitting ? 'Transmission in Progress...' : 'Initialize Transmission'}
+            Initialize Transmission
           </button>
         ) : (
           <div className="flex gap-4 justify-center max-w-md mx-auto">
@@ -1701,7 +1320,6 @@ function AdminTransmitTab({ config, addToast, user }) {
         )}
       </div>
 
-      {/* New Public Results Toggle */}
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mt-8 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h4 className="font-bold text-[#16345f]">Public Tally Board Visibility</h4>
@@ -1744,9 +1362,8 @@ function AdminTransmitTab({ config, addToast, user }) {
   );
 }
 
-
 // ============================================================================
-// 3. REGISTRY PORTAL
+// 3. REGISTRY PORTAL (ELECOM SCANNER)
 // ============================================================================
 function RegistryPortal({ config, addToast, user }) {
   const [authOk, setAuthOk] = useState(false);
@@ -1754,7 +1371,6 @@ function RegistryPortal({ config, addToast, user }) {
   const [scanning, setScanning] = useState(false);
   const lastScanned = useRef('');
 
-  // Native Web Audio API Beep Generator 
   const playBeep = () => {
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -1768,7 +1384,7 @@ function RegistryPortal({ config, addToast, user }) {
       osc.frequency.setValueAtTime(1000, ctx.currentTime);
       gain.gain.setValueAtTime(0.1, ctx.currentTime);
       osc.start();
-      osc.stop(ctx.currentTime + 0.15); // Beep for 150ms
+      osc.stop(ctx.currentTime + 0.15); 
     } catch(e) {
       console.warn("Audio feedback not supported.");
     }
@@ -1802,7 +1418,7 @@ function RegistryPortal({ config, addToast, user }) {
 
         if (lastScanned.current !== scannedId) {
           lastScanned.current = scannedId;
-          playBeep(); // Trigger audible feedback
+          playBeep(); 
           setForm(prev => ({...prev, id: scannedId}));
         }
       }, (err) => {});
@@ -1822,7 +1438,6 @@ function RegistryPortal({ config, addToast, user }) {
       id: form.id,
       grade: Number(form.grade),
       hasVoted: false,
-      isTransmitted: false,
       registeredAt: Date.now()
     });
     addToast("Voter registered successfully.", "success");
@@ -1878,9 +1493,317 @@ function RegistryPortal({ config, addToast, user }) {
   );
 }
 
+// ============================================================================
+// VOTER ANALYTICS STANDALONE
+// ============================================================================
+function VoterAnalyticsStandalone({ config, addToast, user }) {
+  const [authOk, setAuthOk] = useState(false);
+  
+  if (!authOk) return <LoginScreen title="Voter Analytics Access" correctHash={config.adminHash} onLogin={() => setAuthOk(true)} />;
+  return <VoterAnalyticsDashboard config={config} user={user} addToast={addToast} />;
+}
+
+function VoterAnalyticsDashboard({ config, user, addToast }) {
+  const [voters, setVoters] = useState([]);
+  const [search, setSearch] = useState('');
+  const [editingCapacity, setEditingCapacity] = useState(false);
+  const [capacityInput, setCapacityInput] = useState(config.totalStudentsCount || 1000);
+
+  // Edit and Delete State
+  const [editVoterId, setEditVoterId] = useState(null);
+  const [editForm, setEditForm] = useState({ id: '', grade: 7, hasVoted: false, isTransmitted: false });
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const vRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters');
+    const unsub = onSnapshot(vRef, snap => {
+      const arr = [];
+      snap.forEach(d => arr.push(d.data()));
+      setVoters(arr);
+    }, (err) => console.error("Analytics onSnapshot error: ", err));
+    return () => unsub();
+  }, [user]);
+
+  const saveCapacity = async () => {
+    try {
+      const val = Number(capacityInput);
+      if (isNaN(val) || val <= 0) {
+        addToast("Please enter a valid number.", "error");
+        return;
+      }
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
+      await updateDoc(ref, { totalStudentsCount: val });
+      addToast("Capacity updated successfully.", "success");
+      setEditingCapacity(false);
+    } catch (e) {
+      addToast("Error updating capacity.", "error");
+    }
+  };
+
+  const filtered = voters.filter(v => v.id.includes(search.toUpperCase()));
+  const groupedByGrade = filtered.reduce((acc, v) => {
+    acc[v.grade] = acc[v.grade] || [];
+    acc[v.grade].push(v);
+    return acc;
+  }, {});
+
+  // Edit Handlers for List
+  const handleEdit = (v) => {
+    setEditVoterId(v.id);
+    setEditForm({ id: v.id, grade: v.grade, hasVoted: v.hasVoted, isTransmitted: v.isTransmitted || false });
+  };
+
+  const saveEdit = async (oldId) => {
+    try {
+      const isNowVoted = String(editForm.hasVoted) === 'true';
+      const isNowTransmitted = String(editForm.isTransmitted) === 'true';
+
+      if (editForm.id.toUpperCase() !== oldId) {
+        const newRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', editForm.id.toUpperCase());
+        const newSnap = await getDoc(newRef);
+        if (newSnap.exists()) {
+          addToast("A voter with that ID already exists.", "error");
+          return;
+        }
+
+        const oldRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', oldId);
+        const oldSnap = await getDoc(oldRef);
+
+        await setDoc(newRef, {
+          ...oldSnap.data(),
+          id: editForm.id.toUpperCase(),
+          grade: Number(editForm.grade),
+          hasVoted: isNowVoted,
+          isTransmitted: isNowTransmitted
+        });
+        await deleteDoc(oldRef);
+      } else {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', oldId);
+        await updateDoc(docRef, {
+          grade: Number(editForm.grade),
+          hasVoted: isNowVoted,
+          isTransmitted: isNowTransmitted
+        });
+      }
+      addToast("Voter successfully updated.", "success");
+      setEditVoterId(null);
+    } catch (err) {
+      addToast("Error updating voter: " + err.message, "error");
+    }
+  };
+
+  const executeDelete = async (id) => {
+    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', id));
+    addToast("Voter successfully removed.", "success");
+    setConfirmDeleteId(null);
+  };
+
+  const cancelEdit = () => setEditVoterId(null);
+
+  const totalStudents = config.totalStudentsCount || 1000;
+  const totalRegistered = voters.length;
+  const votedCount = voters.filter(v => v.hasVoted).length;
+  const transmittedCount = config.transmittedBallotsCount || 0;
+
+  const getPercentage = (value, total) => total === 0 ? 0 : Math.round((value / total) * 100);
+
+  return (
+    <div className="max-w-5xl mx-auto py-12 px-6 font-sans space-y-10">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end pb-4 border-b border-slate-200 gap-4">
+        <div>
+          <h2 className="text-3xl font-black text-[#16345f] mb-1">Voter Analytics</h2>
+          <p className="text-slate-500 text-sm">Minimalist overview and detailed registry management.</p>
+        </div>
+        <div className="w-full md:w-64">
+          <input type="text" placeholder="Search ID..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-[#16345f] text-sm font-medium uppercase font-mono" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-slate-50 p-5 rounded-lg border border-slate-200">
+          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Capacity</div>
+          {editingCapacity ? (
+            <div className="flex items-center gap-2 mt-1">
+              <input type="number" value={capacityInput} onChange={e=>setCapacityInput(e.target.value)} className="w-16 p-1 border border-slate-300 rounded outline-none text-sm font-bold bg-white text-slate-800" />
+              <button onClick={saveCapacity} className="text-emerald-600 hover:text-emerald-800 font-bold text-xs">Save</button>
+              <button onClick={() => setEditingCapacity(false)} className="text-slate-500 hover:text-slate-700 font-bold text-xs">Cancel</button>
+            </div>
+          ) : (
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-slate-800">{totalStudents.toLocaleString()}</span>
+              <button onClick={() => { setCapacityInput(totalStudents); setEditingCapacity(true); }} className="text-slate-400 hover:text-[#16345f] text-[10px] uppercase font-bold underline">Edit</button>
+            </div>
+          )}
+        </div>
+        <div className="bg-slate-50 p-5 rounded-lg border border-slate-200">
+          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Registered</div>
+          <span className="text-2xl font-black text-blue-600">{totalRegistered.toLocaleString()}</span>
+        </div>
+        <div className="bg-slate-50 p-5 rounded-lg border border-slate-200">
+          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Voted (Kiosk)</div>
+          <span className="text-2xl font-black text-amber-600">{votedCount.toLocaleString()}</span>
+        </div>
+        <div className="bg-slate-50 p-5 rounded-lg border border-slate-200">
+          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Transmitted</div>
+          <span className="text-2xl font-black text-emerald-600">{transmittedCount.toLocaleString()}</span>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        <div>
+          <div className="flex justify-between items-end mb-2 text-xs">
+             <span className="font-bold text-slate-500 uppercase tracking-widest">Registration Rate</span>
+             <span className="font-bold text-slate-800">{getPercentage(totalRegistered, totalStudents)}%</span>
+          </div>
+          <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, getPercentage(totalRegistered, totalStudents))}%` }} />
+          </div>
+        </div>
+
+        <div>
+          <div className="flex justify-between items-end mb-2 text-xs">
+             <span className="font-bold text-slate-500 uppercase tracking-widest">Voter Turnout Rate</span>
+             <span className="font-bold text-slate-800">{getPercentage(votedCount, totalStudents)}%</span>
+          </div>
+          <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, getPercentage(votedCount, totalStudents))}%` }} />
+          </div>
+        </div>
+
+        <div>
+          <div className="flex justify-between items-end mb-2 text-xs">
+             <span className="font-bold text-slate-500 uppercase tracking-widest">Transmission Rate</span>
+             <span className="font-bold text-slate-800">{getPercentage(transmittedCount, votedCount)}%</span>
+          </div>
+          <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, getPercentage(transmittedCount, votedCount))}%` }} />
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-8 border-t border-slate-200">
+        <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Breakdown by Grade Level</h3>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          {[7, 8, 9, 10, 11, 12].map(g => {
+            const grVoters = voters.filter(v => v.grade === g);
+            const grVoted = grVoters.filter(v => v.hasVoted);
+            return (
+              <div key={g} className="bg-white p-3 rounded border border-slate-200">
+                <div className="text-[10px] font-bold text-slate-400 uppercase mb-2">Grade {g}</div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-500 font-medium">Reg:</span>
+                  <span className="font-bold text-slate-800">{grVoters.length}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs mt-1">
+                  <span className="text-slate-500 font-medium">Voted:</span>
+                  <span className="font-bold text-slate-800">{grVoted.length}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Detailed List Restored */}
+      <div className="pt-8 border-t border-slate-200">
+        <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Detailed Voter List</h3>
+        <div className="space-y-6">
+          {Object.keys(groupedByGrade).sort((a,b)=>a-b).map(grade => (
+            <div key={grade} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="bg-[#16345f] text-white px-4 py-3 font-bold tracking-widest text-sm flex justify-between items-center">
+                <span>GRADE {grade}</span>
+                <span className="bg-[#10274a] px-3 py-1 rounded-full text-xs">{groupedByGrade[grade].length} Registered</span>
+              </div>
+              <div className="p-4 flex flex-col gap-3 max-h-[500px] overflow-y-auto">
+                {groupedByGrade[grade].map(v => (
+                  <div key={v.id} className="border border-slate-200 p-4 rounded-lg flex justify-between items-center bg-slate-50 hover:bg-slate-100 transition w-full">
+
+                    {editVoterId === v.id ? (
+                      <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 items-center mr-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Student ID</label>
+                          <input type="text" value={editForm.id} onChange={e=>setEditForm({...editForm, id: e.target.value.toUpperCase()})} className="w-full p-2 border-2 border-slate-200 rounded outline-none focus:border-[#16345f] font-mono text-sm uppercase" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Grade</label>
+                          <select value={editForm.grade} onChange={e=>setEditForm({...editForm, grade: e.target.value})} className="w-full p-2 border-2 border-slate-200 rounded outline-none focus:border-[#16345f] text-sm">
+                            {[7,8,9,10,11,12].map(g => <option key={g} value={g}>Grade {g}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</label>
+                          <select value={editForm.hasVoted} onChange={e=>setEditForm({...editForm, hasVoted: e.target.value})} className="w-full p-2 border-2 border-slate-200 rounded outline-none focus:border-[#16345f] text-sm">
+                            <option value={true}>Voted</option>
+                            <option value={false}>Pending</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Transmitted</label>
+                          <select value={editForm.isTransmitted} onChange={e=>setEditForm({...editForm, isTransmitted: e.target.value})} className="w-full p-2 border-2 border-slate-200 rounded outline-none focus:border-[#16345f] text-sm">
+                            <option value={true}>Transmitted</option>
+                            <option value={false}>No</option>
+                          </select>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-4">
+                        <div>
+                          <div className="font-bold text-[#16345f] text-lg font-mono">Student ID: {v.id}</div>
+                          <div className="text-xs text-slate-500 font-mono">Registered On: {new Date(v.registeredAt).toLocaleDateString()}</div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      {editVoterId === v.id ? (
+                        <div className="flex gap-2">
+                           <button onClick={() => saveEdit(v.id)} className="bg-emerald-600 text-white p-2.5 rounded-lg hover:bg-emerald-700 transition shadow-sm" title="Save">
+                             <CheckCircle className="w-4 h-4" />
+                           </button>
+                           <button onClick={cancelEdit} className="bg-slate-300 text-slate-700 p-2.5 rounded-lg hover:bg-slate-400 transition" title="Cancel">
+                             <X className="w-4 h-4" />
+                           </button>
+                        </div>
+                      ) : confirmDeleteId === v.id ? (
+                        <div className="flex items-center gap-2">
+                           <button onClick={() => executeDelete(v.id)} className="bg-red-600 text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-red-700 transition shadow-sm">Confirm</button>
+                           <button onClick={() => setConfirmDeleteId(null)} className="bg-slate-300 text-slate-700 text-xs font-bold px-3 py-2 rounded-lg hover:bg-slate-400 transition">Cancel</button>
+                        </div>
+                      ) : (
+                        <>
+                          {v.hasVoted ? (
+                            <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 mr-2"><CheckCircle className="w-4 h-4"/> Voted</span>
+                          ) : (
+                            <span className="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 mr-2"><Clock className="w-4 h-4"/> Pending</span>
+                          )}
+                          {v.isTransmitted ? (
+                            <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold mr-2">Transmitted</span>
+                          ) : null}
+                          <button onClick={() => handleEdit(v)} className="p-2 text-slate-400 hover:text-[#16345f] hover:bg-slate-200 rounded-lg transition" title="Edit">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => setConfirmDeleteId(v.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded-lg transition" title="Delete">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  );
+}
 
 // ============================================================================
-// 4. VOTING KIOSK (Includes Abstain, strict validation and separated PM UI)
+// 4. VOTING KIOSK
 // ============================================================================
 function VotingKiosk({ config, addToast, user }) {
   const [authOk, setAuthOk] = useState(false);
@@ -1955,7 +1878,6 @@ function VotingKiosk({ config, addToast, user }) {
   };
 
   const handleNextWithRequiredCheck = () => {
-    // Check if every position available for this voter has an active selection (either candidate or "abstain")
     const council = voterData.grade <= 10 ? 'JHS' : 'SHS';
     const activePositions = POSITIONS.filter(pos => {
       const posCands = candidates.filter(c => {
@@ -1986,7 +1908,6 @@ function VotingKiosk({ config, addToast, user }) {
 
         transaction.update(voterRef, { hasVoted: true });
 
-        // Count votes only for non-abstain options
         Object.values(selections).flat().forEach(candId => {
            if (candId !== 'ABSTAIN') {
              const cRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', candId);
@@ -2081,14 +2002,12 @@ function KioskBallot({ voter, candidates, selections, setSelections, onNext }) {
   });
 
   const handleSelect = (pos, candId, isMulti) => {
-    // If selecting Abstain, clear all previous selections and just pick Abstain
     if (candId === 'ABSTAIN') {
       setSelections({...selections, [pos]: ['ABSTAIN']});
       return;
     }
 
     let current = selections[pos] || [];
-    // Remove ABSTAIN if a candidate is chosen
     current = current.filter(id => id !== 'ABSTAIN');
 
     if(isMulti) {
@@ -2115,21 +2034,10 @@ function KioskBallot({ voter, candidates, selections, setSelections, onNext }) {
         return (
           <div key={pos} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden max-w-3xl mx-auto">
             
-            {/* Header style change for Project Manager to highlight 2 selections */}
-            <div className={`px-5 py-3 flex justify-between items-center ${isMulti ? 'bg-amber-600 text-white' : 'bg-[#16345f]' } text-white`}>
-              <div>
-                <h3 className="text-base font-extrabold uppercase tracking-wider">{pos}</h3>
-                {isMulti && <p className="text-xs text-amber-100 font-medium">Please select up to 2 candidates or choose to abstain</p>}
-              </div>
-              <p className="font-black text-[10px] tracking-widest uppercase bg-black/20 px-2 py-1 rounded">{maxText}</p>
+            <div className="bg-[#16345f] text-white px-5 py-3 flex justify-between items-center">
+              <h3 className="text-base font-extrabold uppercase tracking-wider">{pos}</h3>
+              <p className="text-[#c6b26c] font-black text-[10px]">{maxText}</p>
             </div>
-
-            {/* Separator Box alert specifically for Project Managers */}
-            {isMulti && (
-              <div className="bg-amber-50 border-b border-amber-200 p-4 text-xs font-bold text-amber-800">
-                ⚠️ NOTICE: You can vote for TWO (2) different Project Managers below. To confirm, click on both candidates of your choice.
-              </div>
-            )}
 
             <div className="p-3 space-y-2">
               {posCands.map(c => {
@@ -2149,13 +2057,9 @@ function KioskBallot({ voter, candidates, selections, setSelections, onNext }) {
                 );
               })}
 
-              {/* Strict Required Options - Added ABSTAIN Button */}
-              <div onClick={() => handleSelect(pos, 'ABSTAIN', false)} className={`p-3 rounded-xl border border-dashed cursor-pointer transition-all flex justify-between items-center ${selectedIds.includes('ABSTAIN') ? 'border-amber-500 bg-amber-50/20 shadow-sm' : 'border-slate-200 hover:border-slate-300'}`}>
-                <div>
-                  <div className={`text-sm font-bold uppercase ${selectedIds.includes('ABSTAIN') ? 'text-amber-800' : 'text-slate-500'}`}>ABSTAIN FROM VOTING</div>
-                  <div className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">NO PREFERENCE / CAST AN EMPTY BALLOT</div>
-                </div>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedIds.includes('ABSTAIN') ? 'border-amber-600 bg-amber-600' : 'border-slate-300'}`}>
+              <div onClick={() => handleSelect(pos, 'ABSTAIN', false)} className={`p-3 rounded-xl border border-dashed cursor-pointer transition-all flex justify-between items-center ${selectedIds.includes('ABSTAIN') ? 'border-[#16345f] bg-slate-50 shadow-sm' : 'border-slate-200 hover:border-slate-300'}`}>
+                <div className={`text-sm font-bold uppercase ${selectedIds.includes('ABSTAIN') ? 'text-[#16345f]' : 'text-slate-500'}`}>ABSTAIN</div>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedIds.includes('ABSTAIN') ? 'border-[#16345f] bg-[#16345f]' : 'border-slate-300'}`}>
                   {selectedIds.includes('ABSTAIN') && <div className="w-2 h-2 bg-white rounded-full" />}
                 </div>
               </div>
@@ -2183,7 +2087,7 @@ function KioskReview({ candidates, selections, onSubmit, onBack }) {
   const getSelectedNames = (pos) => {
     const ids = selections[pos] || [];
     if(ids.length === 0 || ids.includes('ABSTAIN')) {
-      return <span className="text-amber-600 font-extrabold italic bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-xs tracking-widest uppercase">ABSTAIN</span>;
+      return <span className="text-slate-400 italic font-medium">ABSTAIN</span>;
     }
     return ids.map(id => {
       const c = candidates.find(cand => cand.id === id);
