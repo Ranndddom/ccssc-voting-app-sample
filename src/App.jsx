@@ -1,8 +1,9 @@
+```react
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ShieldAlert, ShieldCheck, Users, CheckCircle, Clock, 
   Settings, LogOut, QrCode, Lock, UserPlus, FileText, Activity, AlertCircle, ChevronRight, X, TrendingUp,
-  Pencil, Trash2, ArrowRight, BarChart3, EyeOff, Eye
+  Pencil, Trash2, ArrowRight, BarChart3, EyeOff, Eye, Award
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -131,7 +132,11 @@ export default function App() {
           endTime: 0,
           isTransmitting: false,
           transmissionStartTime: 0,
-          isResultsPublic: false // Controls public tally board visibility
+          isResultsPublic: false,
+          totalStudentsCount: 1000, // Added editable total student population
+          transmittedBallotsCount: 0, // Store precise single-ballot counter
+          initialTransmittedBallotsCount: 0,
+          targetTransmittedBallotsCount: 0
         };
         await setDoc(configRef, initialConfig);
         setSystemConfig(initialConfig);
@@ -151,7 +156,7 @@ export default function App() {
   }, [clickCount]);
 
   const safeConfig = systemConfig || {
-    isElectionOpen: false, startTime: 0, endTime: 0, isTransmitting: false, transmissionStartTime: 0, isResultsPublic: false, adminHash: '', elecomHash: ''
+    isElectionOpen: false, startTime: 0, endTime: 0, isTransmitting: false, transmissionStartTime: 0, isResultsPublic: false, adminHash: '', elecomHash: '', totalStudentsCount: 1000, transmittedBallotsCount: 0, initialTransmittedBallotsCount: 0, targetTransmittedBallotsCount: 0
   };
 
   const isHome = view === 'home';
@@ -160,7 +165,7 @@ export default function App() {
   return (
     <div className={`min-h-screen font-sans bg-white text-slate-900`}>
       <ToastContainer toasts={toasts} />
-      
+
       {!isKiosk && (
         <header className={`${isHome ? 'bg-[#0f172a] border-none text-white' : 'bg-[#16345f] text-white'} p-4 md:px-8 flex items-center justify-between relative z-50 transition-colors`}>
           <div 
@@ -177,7 +182,7 @@ export default function App() {
               <p className="text-[10px] text-slate-400 font-bold tracking-widest">ELECTION SYSTEM 2026</p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-4">
              {!isHome && (
                <button 
@@ -203,7 +208,7 @@ export default function App() {
                 <ShieldAlert className="w-5 h-5" /> Admin Portal
               </button>
               <button onClick={() => { setView('registry'); setShowHiddenNav(false); }} className="w-full text-left px-4 py-3 bg-slate-100 hover:bg-[#16345f] hover:text-white rounded-lg font-medium transition flex items-center gap-3">
-                <Users className="w-5 h-5" /> Voter Registry
+                <Users className="w-5 h-5" /> Student Analytics
               </button>
               <button onClick={() => { setView('kiosk'); setShowHiddenNav(false); }} className="w-full text-left px-4 py-3 bg-slate-100 hover:bg-[#16345f] hover:text-white rounded-lg font-medium transition flex items-center gap-3">
                 <Lock className="w-5 h-5" /> Voting Kiosk
@@ -213,7 +218,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Main rendering tree block (Loading screen removed, components load directly but wait gracefully for user config) */}
+      {/* Main rendering tree block */}
       <main className="w-full">
         {view === 'home' && <PublicDashboard config={safeConfig} user={user} />}
         {view === 'admin' && <AdminPortal config={safeConfig} addToast={addToast} user={user} />}
@@ -229,17 +234,19 @@ export default function App() {
 // ============================================================================
 function PublicDashboard({ config, user }) {
   const [candidates, setCandidates] = useState([]);
-  const [votersCount, setVotersCount] = useState(0);
+  const [voters, setVoters] = useState([]);
   const [displayVotes, setDisplayVotes] = useState({});
+  const [animatedTransmittedCount, setAnimatedTransmittedCount] = useState(config.transmittedBallotsCount);
 
   useEffect(() => {
     if (!user) return;
-    const fetchVoters = async () => {
-      const vRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters');
-      const snap = await getDocs(vRef);
-      setVotersCount(snap.size);
-    };
-    fetchVoters();
+    const vRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters');
+    const unsub = onSnapshot(vRef, (snap) => {
+      const arr = [];
+      snap.forEach(d => arr.push(d.data()));
+      setVoters(arr);
+    }, (err) => console.error("Voters count error: ", err));
+    return () => unsub();
   }, [user]);
 
   useEffect(() => {
@@ -253,18 +260,26 @@ function PublicDashboard({ config, user }) {
     return () => unsub();
   }, [user]);
 
+  // Simulate/Animate Vote Transmission at EXACTLY 1 ballot per second
   useEffect(() => {
     if (!config.isTransmitting) {
       const current = {};
       candidates.forEach(c => current[c.id] = c.voteCount || 0);
       setDisplayVotes(current);
+      setAnimatedTransmittedCount(config.transmittedBallotsCount);
       return;
     }
 
     const interval = setInterval(() => {
       const elapsed = Date.now() - config.transmissionStartTime;
-      const studentBallotsTransmitted = Math.floor(elapsed / 2000); 
-      
+      const studentBallotsTransmitted = Math.floor(elapsed / 1000); // 1 ballot per second
+
+      // Animate ballot count
+      const initialBallots = config.initialTransmittedBallotsCount || 0;
+      const targetBallots = config.targetTransmittedBallotsCount || 0;
+      const currentBallotsAnimated = Math.min(targetBallots, initialBallots + studentBallotsTransmitted);
+      setAnimatedTransmittedCount(currentBallotsAnimated);
+
       const newDisplay = {};
       let allDone = true;
 
@@ -272,7 +287,8 @@ function PublicDashboard({ config, user }) {
         const initial = c.initialVoteCount || 0;
         const target = c.targetVoteCount || 0;
         const diff = target - initial; 
-        
+
+        // At 1 ballot per second, we reveal up to that point
         const revealedForCand = Math.min(studentBallotsTransmitted, diff);
         newDisplay[c.id] = initial + revealedForCand;
 
@@ -283,15 +299,24 @@ function PublicDashboard({ config, user }) {
 
       setDisplayVotes(newDisplay);
 
-      if (allDone && candidates.length > 0) clearInterval(interval);
+      if (allDone && (currentBallotsAnimated >= targetBallots) && candidates.length > 0) {
+        clearInterval(interval);
+      }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [config.isTransmitting, config.transmissionStartTime, candidates]);
+  }, [config.isTransmitting, config.transmissionStartTime, config.transmittedBallotsCount, config.initialTransmittedBallotsCount, config.targetTransmittedBallotsCount, candidates]);
 
-  const totalTransmitted = candidates.reduce((sum, c) => sum + (displayVotes[c.id] || 0), 0);
-  const estimatedVotersTurnout = Math.min(votersCount, Math.ceil(totalTransmitted / 7));
-  const turnoutPercent = votersCount === 0 ? 0 : Math.round((estimatedVotersTurnout / votersCount) * 100);
+  const votersCount = voters.length;
+  // Use exact transmitted counter instead of estimated dividing by 7
+  const transmittedBallots = animatedTransmittedCount;
+  
+  // Total Voted count - based on actual students who voted
+  const actualVotedStudentsCount = voters.filter(v => v.hasVoted).length;
+  
+  // Turnout Percentage based on actual students who voted vs total population capacity
+  const totalStudents = config.totalStudentsCount || 1000;
+  const turnoutPercent = totalStudents === 0 ? 0 : Math.round((actualVotedStudentsCount / totalStudents) * 100);
 
   const renderCandidatesGroup = (council, virtualPosition) => {
     const positionCandidates = candidates.filter(c => {
@@ -321,7 +346,7 @@ function PublicDashboard({ config, user }) {
             const isWinner = votes > 0 && votes === highestVotes;
             const name = `${c.firstName} ${c.lastName}`.trim();
             const percentage = totalPosVotes === 0 ? 0 : ((votes / totalPosVotes) * 100).toFixed(1);
-            
+
             return (
               <div 
                 key={c.id} 
@@ -378,7 +403,7 @@ function PublicDashboard({ config, user }) {
           </div>
           <h2 className="text-5xl md:text-7xl font-black tracking-tight mb-4 text-white">Official Tally Board</h2>
           <p className="text-slate-400 text-lg md:text-xl max-w-2xl leading-relaxed">
-            Real-time election results synchronization. Showing all successfully transmitted and verified student ballots.
+            Real-time election results synchronization. Showing all successfully transmitted and verified student ballots. (Speed: 1 ballot / second)
           </p>
         </div>
       </div>
@@ -386,7 +411,7 @@ function PublicDashboard({ config, user }) {
       <div className="max-w-7xl mx-auto px-6 md:px-12 -mt-16 relative z-10">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <MetricCard icon={<Users className="w-6 h-6 text-[#60a5fa]"/>} title="REGISTERED VOTERS" value={votersCount.toLocaleString()} />
-          <MetricCard icon={<CheckCircle className="w-6 h-6 text-[#34d399]"/>} title="TRANSMITTED BALLOTS" value={estimatedVotersTurnout.toLocaleString()} />
+          <MetricCard icon={<CheckCircle className="w-6 h-6 text-[#34d399]"/>} title="TRANSMITTED BALLOTS" value={transmittedBallots.toLocaleString()} />
           <MetricCard title="VOTER TURNOUT" value={`${turnoutPercent}%`} progress={turnoutPercent} />
         </div>
       </div>
@@ -507,7 +532,7 @@ function AdminPortal({ config, addToast, user }) {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  
+
   const isLockedOut = config.isElectionOpen && currentTime < config.endTime;
 
   if (!authOk) return <LoginScreen title="Admin Access" correctHash={config.adminHash} onLogin={() => setAuthOk(true)} />;
@@ -533,13 +558,13 @@ function AdminPortal({ config, addToast, user }) {
 
   return (
     <div className="flex min-h-[calc(100vh-76px)] bg-slate-50">
-      <aside className="w-64 bg-white border-r border-slate-200 shadow-sm z-10 flex flex-col">
+      <aside className="w-64 bg-white border-r border-slate-200 shadow-sm z-10 flex flex-col font-sans">
         <div className="p-6">
           <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Control Panel</h3>
           <nav className="space-y-2">
             <AdminTab id="setup" icon={<Settings/>} label="Election Setup" current={tab} setTab={setTab} />
             <AdminTab id="candidates" icon={<Users/>} label="Candidates" current={tab} setTab={setTab} />
-            <AdminTab id="voters" icon={<FileText/>} label="Voter Registry" current={tab} setTab={setTab} />
+            <AdminTab id="voters" icon={<FileText/>} label="Student Analytics" current={tab} setTab={setTab} />
             <AdminTab id="transmit" icon={<Activity/>} label="Transmission" current={tab} setTab={setTab} />
             <AdminTab id="results" icon={<BarChart3/>} label="Live Results" current={tab} setTab={setTab} />
           </nav>
@@ -555,9 +580,9 @@ function AdminPortal({ config, addToast, user }) {
         <div className="max-w-5xl mx-auto">
           {tab === 'setup' && <AdminSetupTab config={config} addToast={addToast} />}
           {tab === 'candidates' && <AdminCandidatesTab addToast={addToast} user={user} />}
-          {tab === 'voters' && <AdminVotersTab user={user} addToast={addToast} />}
+          {tab === 'voters' && <AdminVotersTab user={user} config={config} addToast={addToast} />}
           {tab === 'transmit' && <AdminTransmitTab config={config} addToast={addToast} user={user} />}
-          {tab === 'results' && <AdminResultsTab user={user} />}
+          {tab === 'results' && <AdminResultsTab user={user} config={config} />}
         </div>
       </main>
     </div>
@@ -575,41 +600,146 @@ function AdminTab({ id, icon, label, current, setTab }) {
 }
 
 // ----------------------------------------------------------------------------
-// NEW ADMIN RESULTS TAB
+// ADMIN RESULTS TAB (Includes real-time simulation delay at 0.5s/ballot & winner highlights)
 // ----------------------------------------------------------------------------
-function AdminResultsTab({ user }) {
+function AdminResultsTab({ user, config }) {
   const [candidates, setCandidates] = useState([]);
-  const [votersCount, setVotersCount] = useState(0);
+  const [voters, setVoters] = useState([]);
+  const [simulatedVotes, setSimulatedVotes] = useState({});
+  const [simulating, setSimulating] = useState(false);
+  const [simTime, setSimTime] = useState(0);
 
   useEffect(() => {
     if (!user) return;
     const vRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters');
-    getDocs(vRef).then(snap => setVotersCount(snap.size)).catch(e => console.error(e));
-    
+    getDocs(vRef).then(snap => {
+      const arr = [];
+      snap.forEach(d => arr.push(d.data()));
+      setVoters(arr);
+    }).catch(e => console.error(e));
+
     const cRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates');
     const unsub = onSnapshot(cRef, snap => {
       const arr = [];
       snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
-      // Sort immediately by vote count descending
-      arr.sort((a,b) => (b.voteCount || 0) - (a.voteCount || 0));
       setCandidates(arr);
     }, err => console.error(err));
     return () => unsub();
   }, [user]);
 
-  const totalTransmittedVotes = candidates.reduce((sum, c) => sum + (c.voteCount || 0), 0);
-  const transmittedBallots = Math.min(votersCount, Math.ceil(totalTransmittedVotes / 7));
-  const turnout = votersCount === 0 ? 0 : Math.round((transmittedBallots / votersCount) * 100);
+  // Set default raw votes when not simulating
+  useEffect(() => {
+    if (!simulating) {
+      const initial = {};
+      candidates.forEach(c => {
+        initial[c.id] = c.voteCount || 0;
+      });
+      setSimulatedVotes(initial);
+    }
+  }, [candidates, simulating]);
+
+  // Handle simulation process: 0.5 seconds per ballot
+  useEffect(() => {
+    if (!simulating) return;
+
+    const interval = setInterval(() => {
+      setSimTime(prev => {
+        const nextTime = prev + 1;
+        const tempVotes = {};
+        let allCompleted = true;
+
+        candidates.forEach(c => {
+          // Candidates have an initial vote count prior to the last transmission, and a final voteCount
+          const initial = c.initialVoteCount || 0;
+          const target = c.voteCount || 0;
+          const difference = target - initial;
+
+          // Scale factor is 0.5s per ballot (which equates to 2 ballots per simulated second)
+          const stepsCompleted = nextTime * 2;
+          const currentProgress = Math.min(difference, stepsCompleted);
+          tempVotes[c.id] = initial + currentProgress;
+
+          if (currentProgress < difference) {
+            allCompleted = false;
+          }
+        });
+
+        setSimulatedVotes(tempVotes);
+
+        if (allCompleted) {
+          clearInterval(interval);
+          setSimulating(false);
+        }
+        return nextTime;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [simulating, candidates]);
+
+  const handleStartSimulation = () => {
+    setSimTime(0);
+    setSimulating(true);
+  };
+
+  const votersCount = voters.length;
+  const transmittedBallots = config.transmittedBallotsCount || 0;
+  const totalStudents = config.totalStudentsCount || 1000;
+  
+  // Turnout is based on actual students who voted
+  const actualVotedStudentsCount = voters.filter(v => v.hasVoted).length;
+  const turnout = totalStudents === 0 ? 0 : Math.round((actualVotedStudentsCount / totalStudents) * 100);
+
+  const getLeaderForPosition = (council, virtualPosition) => {
+    const posCandidates = candidates.filter(c => {
+      if (c.council !== council) return false;
+      if (virtualPosition.startsWith("Grade ") && virtualPosition.endsWith(" Representative")) {
+        const grade = parseInt(virtualPosition.split(" ")[1], 10);
+        return c.position === "Grade Level Representative" && c.gradeLevel === grade;
+      }
+      return c.position === virtualPosition;
+    });
+
+    if (posCandidates.length === 0) return null;
+    let highest = -1;
+    let leaderId = null;
+
+    posCandidates.forEach(c => {
+      const votes = simulatedVotes[c.id] || 0;
+      if (votes > highest) {
+        highest = votes;
+        leaderId = c.id;
+      } else if (votes === highest && votes > 0) {
+        // TIE
+        leaderId = 'tie';
+      }
+    });
+
+    return { leaderId, highest };
+  };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-3xl font-black text-[#16345f] mb-2">Live Election Results</h2>
-        <p className="text-slate-500">Internal view of transmitted votes.</p>
+    <div className="space-y-8 font-sans">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-3xl font-black text-[#16345f] mb-2">Live Election Results</h2>
+          <p className="text-slate-500">Internal view of transmitted votes. Includes a delayed transmission simulation player.</p>
+        </div>
+        <button 
+          onClick={handleStartSimulation} 
+          disabled={simulating}
+          className={`px-5 py-3 rounded-lg font-bold text-sm shadow-md transition-all ${simulating ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-[#16345f] hover:bg-[#0b1a30] text-white'}`}
+        >
+          {simulating ? `Simulating (${simTime}s)...` : "Run Display Simulation"}
+        </button>
       </div>
-      
+
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
+           <div className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">Total Capacity</div>
+           <div className="text-4xl font-black text-[#16345f]">{totalStudents.toLocaleString()}</div>
+        </div>
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
            <div className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">Registered Voters</div>
            <div className="text-4xl font-black text-[#16345f]">{votersCount.toLocaleString()}</div>
@@ -626,54 +756,80 @@ function AdminResultsTab({ user }) {
 
       {/* Simpler List Layout for Results */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-         
+
          {/* JHS Results Table */}
          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="bg-[#16345f] text-white px-5 py-4 font-black tracking-widest uppercase">JHS Results</div>
+            <div className="bg-[#16345f] text-white px-5 py-4 font-black tracking-widest uppercase flex justify-between items-center">
+              <span>JHS Results</span>
+              {simulating && <span className="text-[10px] bg-[#c6b26c] text-[#16345f] px-2 py-0.5 rounded font-bold animate-pulse">SIMULATION PLAYING</span>}
+            </div>
             <div className="p-0">
               {getCouncilPositions('JHS').map(pos => {
                 const cands = candidates.filter(c => c.council === 'JHS' && (c.position === pos || (pos.includes('Grade') && c.position === 'Grade Level Representative' && pos.includes(c.gradeLevel))));
                 if(cands.length===0) return null;
+                const leaderInfo = getLeaderForPosition('JHS', pos);
                 return (
                   <div key={pos} className="border-b border-slate-100 last:border-0 p-5">
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{pos}</h4>
                     <div className="space-y-2.5">
-                      {cands.map(c => (
-                        <div key={c.id} className="flex justify-between items-center group">
-                          <div>
-                             <span className="font-bold text-[#16345f] text-sm group-hover:text-blue-600 transition-colors">{c.lastName}, {c.firstName}</span>
-                             <span className="text-[10px] text-slate-400 ml-2 font-mono uppercase">{c.partyList || 'IND'}</span>
+                      {cands.map(c => {
+                        const votes = simulatedVotes[c.id] || 0;
+                        const isLeading = leaderInfo && leaderInfo.leaderId === c.id && votes > 0;
+                        return (
+                          <div key={c.id} className={`flex justify-between items-center group p-2 rounded-lg transition-colors ${isLeading ? 'bg-emerald-50 border border-emerald-200/50' : 'hover:bg-slate-50'}`}>
+                            <div className="flex items-center gap-2">
+                               <span className={`font-bold text-sm ${isLeading ? 'text-emerald-800' : 'text-[#16345f] group-hover:text-blue-600'}`}>{c.lastName}, {c.firstName}</span>
+                               <span className="text-[10px] text-slate-400 font-mono uppercase">{c.partyList || 'IND'}</span>
+                               {isLeading && (
+                                 <span className="bg-emerald-100 text-emerald-800 text-[9px] px-1.5 py-0.5 rounded font-extrabold flex items-center gap-1">
+                                   <Award className="w-2.5 h-2.5" /> LEADER
+                                 </span>
+                               )}
+                            </div>
+                            <span className={`font-mono font-black text-lg px-3 py-1 rounded-lg min-w-[3rem] text-center ${isLeading ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-50 border border-slate-100 text-[#16345f]'}`}>{votes}</span>
                           </div>
-                          <span className="font-mono font-black text-lg bg-slate-50 border border-slate-100 px-3 py-1 rounded-lg text-[#16345f] min-w-[3rem] text-center">{c.voteCount || 0}</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )
               })}
             </div>
          </div>
-         
+
          {/* SHS Results Table */}
          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="bg-[#16345f] text-white px-5 py-4 font-black tracking-widest uppercase">SHS Results</div>
+            <div className="bg-[#16345f] text-white px-5 py-4 font-black tracking-widest uppercase flex justify-between items-center">
+              <span>SHS Results</span>
+              {simulating && <span className="text-[10px] bg-[#c6b26c] text-[#16345f] px-2 py-0.5 rounded font-bold animate-pulse">SIMULATION PLAYING</span>}
+            </div>
             <div className="p-0">
               {getCouncilPositions('SHS').map(pos => {
                 const cands = candidates.filter(c => c.council === 'SHS' && (c.position === pos || (pos.includes('Grade') && c.position === 'Grade Level Representative' && pos.includes(c.gradeLevel))));
                 if(cands.length===0) return null;
+                const leaderInfo = getLeaderForPosition('SHS', pos);
                 return (
                   <div key={pos} className="border-b border-slate-100 last:border-0 p-5">
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{pos}</h4>
                     <div className="space-y-2.5">
-                      {cands.map(c => (
-                        <div key={c.id} className="flex justify-between items-center group">
-                          <div>
-                             <span className="font-bold text-[#16345f] text-sm group-hover:text-blue-600 transition-colors">{c.lastName}, {c.firstName}</span>
-                             <span className="text-[10px] text-slate-400 ml-2 font-mono uppercase">{c.partyList || 'IND'}</span>
+                      {cands.map(c => {
+                        const votes = simulatedVotes[c.id] || 0;
+                        const isLeading = leaderInfo && leaderInfo.leaderId === c.id && votes > 0;
+                        return (
+                          <div key={c.id} className={`flex justify-between items-center group p-2 rounded-lg transition-colors ${isLeading ? 'bg-emerald-50 border border-emerald-200/50' : 'hover:bg-slate-50'}`}>
+                            <div className="flex items-center gap-2">
+                               <span className={`font-bold text-sm ${isLeading ? 'text-emerald-800' : 'text-[#16345f] group-hover:text-blue-600'}`}>{c.lastName}, {c.firstName}</span>
+                               <span className="text-[10px] text-slate-400 font-mono uppercase">{c.partyList || 'IND'}</span>
+                               {isLeading && (
+                                 <span className="bg-emerald-100 text-emerald-800 text-[9px] px-1.5 py-0.5 rounded font-extrabold flex items-center gap-1">
+                                   <Award className="w-2.5 h-2.5" /> LEADER
+                                 </span>
+                               )}
+                            </div>
+                            <span className={`font-mono font-black text-lg px-3 py-1 rounded-lg min-w-[3rem] text-center ${isLeading ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-50 border border-slate-100 text-[#16345f]'}`}>{votes}</span>
                           </div>
-                          <span className="font-mono font-black text-lg bg-slate-50 border border-slate-100 px-3 py-1 rounded-lg text-[#16345f] min-w-[3rem] text-center">{c.voteCount || 0}</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )
@@ -695,7 +851,7 @@ function AdminFirstSetup({ config, addToast }) {
     e.preventDefault();
     if(pass1 !== pass2) return addToast("Passwords do not match.", "error");
     if(pass1.length < 6) return addToast("Password too short.", "error");
-    
+
     setLoading(true);
     const newHash = await hashPassword(pass1);
     const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
@@ -710,7 +866,7 @@ function AdminFirstSetup({ config, addToast }) {
         <ShieldAlert className="w-16 h-16 text-[#c6b26c] mx-auto mb-6" />
         <h2 className="text-2xl font-black text-center text-[#16345f] mb-2 uppercase tracking-widest">Initial Setup Required</h2>
         <p className="text-center text-slate-500 mb-8 text-sm">Please secure the administrative account by changing the default password.</p>
-        
+
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">New Admin Password</label>
@@ -750,7 +906,7 @@ function AdminSetupTab({ config, addToast }) {
     if (config.startTime) setStart(formatDateTimeLocal(config.startTime));
     if (config.endTime) setEnd(formatDateTimeLocal(config.endTime));
   }, [config.startTime, config.endTime]);
-  
+
   const updateSchedule = async () => {
     if(!start || !end) return addToast("Select both start and end times.", "error");
     const startMs = new Date(start).getTime();
@@ -764,10 +920,10 @@ function AdminSetupTab({ config, addToast }) {
 
   const toggleElection = async () => {
     if(!config.startTime || !config.endTime) return addToast("Please set and save a schedule first.", "error");
-    
+
     if(!config.isElectionOpen) {
        if(Date.now() >= config.endTime) return addToast("Cannot open election. The scheduled end time has already passed.", "error");
-       
+
        const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
        await updateDoc(ref, { isElectionOpen: true });
        addToast("Election officially opened. Access lock engaged.", "success");
@@ -797,7 +953,7 @@ function AdminSetupTab({ config, addToast }) {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 font-sans">
       <div>
         <h2 className="text-3xl font-black text-[#16345f] mb-2">Election Setup</h2>
         <p className="text-slate-500">Configure election timing and system access keys.</p>
@@ -852,7 +1008,7 @@ function AdminCandidatesTab({ addToast, user }) {
   const [candidates, setCandidates] = useState([]);
   const [editId, setEditId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  
+
   const [form, setForm] = useState({ firstName: '', middleName: '', lastName: '', position: 'President', council: 'JHS', gradeLevel: '', partyList: '' });
 
   useEffect(() => {
@@ -892,7 +1048,7 @@ function AdminCandidatesTab({ addToast, user }) {
       await setDoc(doc(cRef, crypto.randomUUID()), newCand);
       addToast("Candidate successfully added.", "success");
     }
-    
+
     setForm({ firstName: '', middleName: '', lastName: '', position: 'President', council: 'JHS', gradeLevel: '', partyList: '' });
   };
 
@@ -933,7 +1089,7 @@ function AdminCandidatesTab({ addToast, user }) {
   const shsCandidates = useMemo(() => sortCandidates(candidates.filter(c => c.council === 'SHS')), [candidates]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 font-sans">
       <div>
         <h2 className="text-3xl font-black text-[#16345f] mb-2">Candidate Management</h2>
         <p className="text-slate-500">Add, edit, or remove official candidates. All names are forced to uppercase.</p>
@@ -1093,13 +1249,18 @@ function AdminCandidatesTab({ addToast, user }) {
   );
 }
 
-function AdminVotersTab({ user, addToast }) {
+// ----------------------------------------------------------------------------
+// STUDENT ANALYTICS TAB (Replaces Voter Registry with detailed telemetry)
+// ----------------------------------------------------------------------------
+function AdminVotersTab({ user, config, addToast }) {
   const [voters, setVoters] = useState([]);
   const [search, setSearch] = useState('');
-  
+  const [editingCapacity, setEditingCapacity] = useState(false);
+  const [capacityInput, setCapacityInput] = useState(config.totalStudentsCount || 1000);
+
   // Edit and Delete State
   const [editVoterId, setEditVoterId] = useState(null);
-  const [editForm, setEditForm] = useState({ id: '', grade: 7, hasVoted: false });
+  const [editForm, setEditForm] = useState({ id: '', grade: 7, hasVoted: false, isTransmitted: false });
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   useEffect(() => {
@@ -1121,42 +1282,60 @@ function AdminVotersTab({ user, addToast }) {
     return acc;
   }, {});
 
+  // Update total student population capacity
+  const saveCapacity = async () => {
+    try {
+      const val = Number(capacityInput);
+      if (isNaN(val) || val <= 0) {
+        addToast("Please enter a valid number.", "error");
+        return;
+      }
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
+      await updateDoc(ref, { totalStudentsCount: val });
+      addToast("Total student capacity updated successfully.", "success");
+      setEditingCapacity(false);
+    } catch (e) {
+      addToast("Error updating capacity.", "error");
+    }
+  };
+
   // Edit Voter Handlers
   const handleEdit = (v) => {
     setEditVoterId(v.id);
-    setEditForm({ id: v.id, grade: v.grade, hasVoted: v.hasVoted });
+    setEditForm({ id: v.id, grade: v.grade, hasVoted: v.hasVoted, isTransmitted: v.isTransmitted || false });
   };
 
   const saveEdit = async (oldId) => {
     try {
       const isNowVoted = String(editForm.hasVoted) === 'true';
-      
+      const isNowTransmitted = String(editForm.isTransmitted) === 'true';
+
       if (editForm.id.toUpperCase() !== oldId) {
-        // If ID changed, verify it doesn't already exist to prevent overwrites
+        // Verify unique
         const newRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', editForm.id.toUpperCase());
         const newSnap = await getDoc(newRef);
         if (newSnap.exists()) {
           addToast("A voter with that ID already exists.", "error");
           return;
         }
-        
-        // Recreate Document with new ID
+
         const oldRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', oldId);
         const oldSnap = await getDoc(oldRef);
-        
+
         await setDoc(newRef, {
           ...oldSnap.data(),
           id: editForm.id.toUpperCase(),
           grade: Number(editForm.grade),
-          hasVoted: isNowVoted
+          hasVoted: isNowVoted,
+          isTransmitted: isNowTransmitted
         });
         await deleteDoc(oldRef);
       } else {
-        // Just update existing document
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', oldId);
         await updateDoc(docRef, {
           grade: Number(editForm.grade),
-          hasVoted: isNowVoted
+          hasVoted: isNowVoted,
+          isTransmitted: isNowTransmitted
         });
       }
       addToast("Voter successfully updated.", "success");
@@ -1174,15 +1353,83 @@ function AdminVotersTab({ user, addToast }) {
 
   const cancelEdit = () => setEditVoterId(null);
 
+  // Computations for telemetry
+  const totalStudents = config.totalStudentsCount || 1000;
+  const totalRegistered = voters.length;
+  const registrationProgressPercent = totalStudents === 0 ? 0 : Math.round((totalRegistered / totalStudents) * 100);
+
+  // Voted status is exact number of students where hasVoted is true
+  const votedCount = voters.filter(v => v.hasVoted).length;
+  const transmittedCount = config.transmittedBallotsCount || 0;
+  const turnoutPercent = totalStudents === 0 ? 0 : Math.round((votedCount / totalStudents) * 100);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 font-sans">
       <div className="flex justify-between items-end">
         <div>
-          <h2 className="text-3xl font-black text-[#16345f] mb-2">Voter Registry</h2>
-          <p className="text-slate-500">Monitor registered students, edit records, and voting status.</p>
+          <h2 className="text-3xl font-black text-[#16345f] mb-2">Student Analytics</h2>
+          <p className="text-slate-500">Monitor school-wide demographics, total registration, and live turnout metrics.</p>
         </div>
         <div className="w-64">
-          <input type="text" placeholder="Search ID..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-[#16345f] text-sm font-medium uppercase" />
+          <input type="text" placeholder="Search ID..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-[#16345f] text-sm font-medium uppercase font-mono" />
+        </div>
+      </div>
+
+      {/* Analytics Telemetry Dashboard */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 bg-[#0f172a] text-white p-6 rounded-2xl border border-slate-800 shadow-xl">
+        <div className="flex flex-col justify-center">
+          <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total Capacity</div>
+          {editingCapacity ? (
+            <div className="flex gap-2 mt-1">
+              <input 
+                type="number" 
+                value={capacityInput} 
+                onChange={e=>setCapacityInput(e.target.value)}
+                className="bg-slate-800 text-white font-mono font-bold p-1 rounded w-24 border border-slate-700 text-lg outline-none"
+              />
+              <button onClick={saveCapacity} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-2 rounded font-bold">Save</button>
+              <button onClick={() => setEditingCapacity(false)} className="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 rounded">Cancel</button>
+            </div>
+          ) : (
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black">{totalStudents.toLocaleString()}</span>
+              <button onClick={() => { setCapacityInput(totalStudents); setEditingCapacity(true); }} className="text-slate-400 hover:text-[#c6b26c] text-[10px] uppercase tracking-wider font-extrabold underline">Change</button>
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col justify-center">
+          <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Registered Voters</div>
+          <span className="text-3xl font-black text-[#60a5fa]">{totalRegistered.toLocaleString()}</span>
+        </div>
+        <div className="flex flex-col justify-center">
+          <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Transmitted Ballots</div>
+          <span className="text-3xl font-black text-emerald-400">{transmittedCount.toLocaleString()}</span>
+        </div>
+        <div className="flex flex-col justify-center">
+          <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Voted (Kiosk Total)</div>
+          <span className="text-3xl font-black text-[#c6b26c]">{votedCount.toLocaleString()}</span>
+        </div>
+      </div>
+
+      {/* Progress Bars Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+        <div>
+          <div className="flex justify-between items-end mb-2">
+             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Registration Rate (Registered vs Capacity)</div>
+             <div className="text-sm font-black text-[#16345f]">{registrationProgressPercent}%</div>
+          </div>
+          <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, registrationProgressPercent)}%` }} />
+          </div>
+        </div>
+        <div>
+          <div className="flex justify-between items-end mb-2">
+             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Turnout Rate (Voted vs Capacity)</div>
+             <div className="text-sm font-black text-[#16345f]">{turnoutPercent}%</div>
+          </div>
+          <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, turnoutPercent)}%` }} />
+          </div>
         </div>
       </div>
 
@@ -1206,9 +1453,9 @@ function AdminVotersTab({ user, addToast }) {
           <div className="p-4 flex flex-col gap-3 max-h-[500px] overflow-y-auto">
             {groupedByGrade[grade].map(v => (
               <div key={v.id} className="border border-slate-200 p-4 rounded-lg flex justify-between items-center bg-slate-50 hover:bg-slate-100 transition w-full">
-                
+
                 {editVoterId === v.id ? (
-                  <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 items-center mr-4">
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 items-center mr-4">
                     <div>
                       <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Student ID</label>
                       <input type="text" value={editForm.id} onChange={e=>setEditForm({...editForm, id: e.target.value.toUpperCase()})} className="w-full p-2 border-2 border-slate-200 rounded outline-none focus:border-[#16345f] font-mono text-sm uppercase" />
@@ -1226,16 +1473,23 @@ function AdminVotersTab({ user, addToast }) {
                         <option value={false}>Pending</option>
                       </select>
                     </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Transmitted</label>
+                      <select value={editForm.isTransmitted} onChange={e=>setEditForm({...editForm, isTransmitted: e.target.value})} className="w-full p-2 border-2 border-slate-200 rounded outline-none focus:border-[#16345f] text-sm">
+                        <option value={true}>Transmitted</option>
+                        <option value={false}>No</option>
+                      </select>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center gap-4">
                     <div>
-                      <div className="font-bold text-[#16345f] text-lg">Student ID: {v.id}</div>
-                      <div className="text-sm text-slate-500 font-mono">Registered On: {new Date(v.registeredAt).toLocaleDateString()}</div>
+                      <div className="font-bold text-[#16345f] text-lg font-mono">Student ID: {v.id}</div>
+                      <div className="text-xs text-slate-500 font-mono">Registered On: {new Date(v.registeredAt).toLocaleDateString()}</div>
                     </div>
                   </div>
                 )}
-                
+
                 <div className="flex items-center gap-2">
                   {editVoterId === v.id ? (
                     <div className="flex gap-2">
@@ -1258,6 +1512,9 @@ function AdminVotersTab({ user, addToast }) {
                       ) : (
                         <span className="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 mr-2"><Clock className="w-4 h-4"/> Pending</span>
                       )}
+                      {v.isTransmitted ? (
+                        <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold mr-2">Transmitted</span>
+                      ) : null}
                       <button onClick={() => handleEdit(v)} className="p-2 text-slate-400 hover:text-[#16345f] hover:bg-slate-200 rounded-lg transition" title="Edit">
                         <Pencil className="w-4 h-4" />
                       </button>
@@ -1279,10 +1536,11 @@ function AdminVotersTab({ user, addToast }) {
 
 function AdminTransmitTab({ config, addToast, user }) {
   const [candidates, setCandidates] = useState([]);
+  const [voters, setVoters] = useState([]);
   const [confirmTransmit, setConfirmTransmit] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [resetCode, setResetCode] = useState('');
-  
+
   useEffect(() => {
     if (!user) return;
     const cRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates');
@@ -1294,18 +1552,39 @@ function AdminTransmitTab({ config, addToast, user }) {
     return () => unsub();
   }, [user]);
 
-  const totalPending = candidates.reduce((sum, c) => sum + (c.pendingVotes || 0), 0);
+  useEffect(() => {
+    if (!user) return;
+    const vRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters');
+    const unsub = onSnapshot(vRef, snap => {
+      const arr = [];
+      snap.forEach(d => arr.push(d.data()));
+      setVoters(arr);
+    }, (err) => console.error("Voters snap error: ", err));
+    return () => unsub();
+  }, [user]);
+
+  // Voted but untransmitted voters are those where hasVoted is true but isTransmitted is falsy
+  const pendingVoterBallots = voters.filter(v => v.hasVoted && !v.isTransmitted);
+  const totalPendingBallots = pendingVoterBallots.length;
 
   const handleTransmit = async () => {
-    if(totalPending === 0) return addToast("No pending votes to transmit.", "error");
+    if(totalPendingBallots === 0) return addToast("No pending ballots to transmit.", "error");
 
     const batch = writeBatch(db);
     const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
+    
+    const initialCount = config.transmittedBallotsCount || 0;
+    const targetCount = initialCount + totalPendingBallots;
+
     batch.update(configRef, {
       isTransmitting: true,
-      transmissionStartTime: Date.now()
+      transmissionStartTime: Date.now(),
+      initialTransmittedBallotsCount: initialCount,
+      targetTransmittedBallotsCount: targetCount,
+      transmittedBallotsCount: targetCount
     });
 
+    // Save vote modifications
     candidates.forEach(c => {
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', c.id);
       const current = c.voteCount || 0;
@@ -1318,9 +1597,15 @@ function AdminTransmitTab({ config, addToast, user }) {
       });
     });
 
+    // Mark pending voters as transmitted
+    pendingVoterBallots.forEach(v => {
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', v.id);
+      batch.update(ref, { isTransmitted: true });
+    });
+
     await batch.commit();
     setConfirmTransmit(false);
-    addToast("Vote transmission successfully initialized.", "success");
+    addToast("Vote transmission successfully initialized at 1 ballot per second.", "success");
   };
 
   const togglePublicResults = async () => {
@@ -1337,10 +1622,10 @@ function AdminTransmitTab({ config, addToast, user }) {
     if(resetCode !== 'RESET') {
        return addToast("Invalid reset code.", "error");
     }
-    
+
     try {
       const batch = writeBatch(db);
-      
+
       const cSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates'));
       cSnap.forEach(cDoc => {
         batch.delete(cDoc.ref);
@@ -1364,7 +1649,11 @@ function AdminTransmitTab({ config, addToast, user }) {
         startTime: 0,
         endTime: 0,
         transmissionStartTime: 0,
-        isResultsPublic: false
+        isResultsPublic: false,
+        totalStudentsCount: 1000,
+        transmittedBallotsCount: 0,
+        initialTransmittedBallotsCount: 0,
+        targetTransmittedBallotsCount: 0
       });
 
       await batch.commit();
@@ -1378,7 +1667,7 @@ function AdminTransmitTab({ config, addToast, user }) {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 font-sans">
       <div>
         <h2 className="text-3xl font-black text-[#16345f] mb-2">Transmission Controls</h2>
         <p className="text-slate-500">Push offline kiosk votes to the public live tally board.</p>
@@ -1386,15 +1675,19 @@ function AdminTransmitTab({ config, addToast, user }) {
 
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 text-center">
         <Activity className="w-16 h-16 text-[#c6b26c] mx-auto mb-4" />
-        <div className="text-6xl font-black text-[#16345f] mb-2 font-mono">{totalPending.toLocaleString()}</div>
-        <div className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-8">Pending Votes to Transmit</div>
+        <div className="text-6xl font-black text-[#16345f] mb-2 font-mono">{totalPendingBallots.toLocaleString()}</div>
+        <div className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-8">Pending Student Ballots to Transmit</div>
+
+        <p className="text-xs text-slate-500 max-w-md mx-auto mb-6">
+          * Note: Votes are calculated strictly on a 1 ballot per student basis (not per candidate position). Abstains will not show up in the candidates' tally.
+        </p>
 
         {!confirmTransmit ? (
           <button 
             onClick={() => setConfirmTransmit(true)}
-            disabled={totalPending === 0 || config.isTransmitting}
+            disabled={totalPendingBallots === 0 || config.isTransmitting}
             className={`w-full max-w-md mx-auto block py-4 rounded-xl font-bold uppercase tracking-widest transition-all ${
-              totalPending > 0 && !config.isTransmitting 
+              totalPendingBallots > 0 && !config.isTransmitting 
                 ? 'bg-[#16345f] text-white hover:bg-[#0b1a30] shadow-xl hover:-translate-y-1' 
                 : 'bg-slate-100 text-slate-400 cursor-not-allowed'
             }`}
@@ -1432,7 +1725,7 @@ function AdminTransmitTab({ config, addToast, user }) {
           <h4 className="font-bold text-red-700">Danger Zone: Full Factory Reset</h4>
           <p className="text-sm text-red-600/80">Permanently erase all candidates, registered voters, votes, and active election sessions.</p>
         </div>
-        
+
         {!showReset ? (
           <button onClick={() => setShowReset(true)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-sm transition whitespace-nowrap">
             Factory Reset
@@ -1507,13 +1800,11 @@ function RegistryPortal({ config, addToast, user }) {
       const scanner = new window.Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
       scanner.render((text) => {
         const scannedId = text.toUpperCase();
-        
-        // Continuous scan logic: Only trigger if the QR code is different from the very last one read
+
         if (lastScanned.current !== scannedId) {
           lastScanned.current = scannedId;
           playBeep(); // Trigger audible feedback
           setForm(prev => ({...prev, id: scannedId}));
-          // NOTE: We no longer call scanner.clear() or setScanning(false) so it stays completely open
         }
       }, (err) => {});
       window.html5QrcodeScanner = scanner;
@@ -1532,11 +1823,11 @@ function RegistryPortal({ config, addToast, user }) {
       id: form.id,
       grade: Number(form.grade),
       hasVoted: false,
+      isTransmitted: false,
       registeredAt: Date.now()
     });
     addToast("Voter registered successfully.", "success");
-    
-    // Clear current form ID, AND clear the ref so they can scan the exact same ID again if they want to
+
     lastScanned.current = '';
     setForm(prev => ({ ...prev, id: '' }));
   };
@@ -1544,7 +1835,7 @@ function RegistryPortal({ config, addToast, user }) {
   if (!authOk) return <LoginScreen title="ELECOM Registry" correctHash={config.elecomHash} onLogin={() => setAuthOk(true)} />;
 
   return (
-    <div className="max-w-xl mx-auto py-12 px-4">
+    <div className="max-w-xl mx-auto py-12 px-4 font-sans">
       <div className="bg-white p-8 rounded-2xl shadow-xl border-t-8 border-[#c6b26c]">
         <div className="flex items-center gap-4 mb-8 border-b border-slate-100 pb-6">
           <div className="bg-[#16345f] p-3 rounded-xl text-[#c6b26c]">
@@ -1590,7 +1881,7 @@ function RegistryPortal({ config, addToast, user }) {
 
 
 // ============================================================================
-// 4. VOTING KIOSK
+// 4. VOTING KIOSK (Includes Abstain, strict validation and separated PM UI)
 // ============================================================================
 function VotingKiosk({ config, addToast, user }) {
   const [authOk, setAuthOk] = useState(false);
@@ -1630,7 +1921,7 @@ function VotingKiosk({ config, addToast, user }) {
   if (!authOk) {
     if (!isTimeValid) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white p-6">
+        <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white p-6 font-sans">
           <div className="text-center bg-[#1e293b] p-6 rounded-2xl border border-slate-700 max-w-sm w-full shadow-xl">
             <Lock className="w-8 h-8 text-[#c6b26c] mx-auto mb-3" />
             <h1 className="text-lg font-extrabold mb-1 tracking-tight">Kiosk Locked</h1>
@@ -1654,14 +1945,36 @@ function VotingKiosk({ config, addToast, user }) {
     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_voters', id);
     const snap = await getDoc(docRef);
     if(!snap.exists()) throw new Error("Voter not found in registry.");
-    
+
     const v = snap.data();
     if(v.grade !== Number(grade)) throw new Error("Details mismatch. Check grade.");
     if(v.hasVoted) throw new Error("Voter has already cast their ballot.");
-    
+
     setVoterData(v);
     setSelections({});
     setStep(2);
+  };
+
+  const handleNextWithRequiredCheck = () => {
+    // Check if every position available for this voter has an active selection (either candidate or "abstain")
+    const council = voterData.grade <= 10 ? 'JHS' : 'SHS';
+    const activePositions = POSITIONS.filter(pos => {
+      const posCands = candidates.filter(c => {
+        if(c.council !== council) return false;
+        if(c.position === 'Grade Level Representative' && c.gradeLevel !== voterData.grade) return false;
+        return c.position === pos;
+      });
+      return posCands.length > 0;
+    });
+
+    for (let pos of activePositions) {
+      const userSel = selections[pos];
+      if (!userSel || userSel.length === 0) {
+        addToast(`Please select a candidate or "Abstain" for ${pos}.`, "error");
+        return;
+      }
+    }
+    setStep(3);
   };
 
   const handleSubmitVote = async () => {
@@ -1671,15 +1984,18 @@ function VotingKiosk({ config, addToast, user }) {
       await runTransaction(db, async (transaction) => {
         const vSnap = await transaction.get(voterRef);
         if(vSnap.data().hasVoted) throw new Error("Double voting detected.");
-        
+
         transaction.update(voterRef, { hasVoted: true });
-        
+
+        // Count votes only for non-abstain options
         Object.values(selections).flat().forEach(candId => {
-           const cRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', candId);
-           transaction.update(cRef, { pendingVotes: increment(1) });
+           if (candId !== 'ABSTAIN') {
+             const cRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', candId);
+             transaction.update(cRef, { pendingVotes: increment(1) });
+           }
         });
       });
-      
+
       setStep(4);
       setTimeout(() => {
         setVoterData(null);
@@ -1693,7 +2009,7 @@ function VotingKiosk({ config, addToast, user }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-100 overflow-y-auto">
+    <div className="fixed inset-0 z-[100] bg-slate-100 overflow-y-auto font-sans">
       {voterData && step < 4 && (
         <div className="bg-[#16345f] text-white py-3 px-6 shadow-md flex justify-between items-center text-xs font-bold tracking-wider">
           <span className="text-slate-300">STUDENT SESSION ACTIVE</span>
@@ -1703,7 +2019,7 @@ function VotingKiosk({ config, addToast, user }) {
 
       <div className="max-w-4xl mx-auto py-10 px-4">
         {step === 1 && <KioskAuth onAuth={handleVoterAuth} addToast={addToast} />}
-        {step === 2 && <KioskBallot voter={voterData} candidates={candidates} selections={selections} setSelections={setSelections} onNext={() => setStep(3)} />}
+        {step === 2 && <KioskBallot voter={voterData} candidates={candidates} selections={selections} setSelections={setSelections} onNext={handleNextWithRequiredCheck} />}
         {step === 3 && <KioskReview candidates={candidates} selections={selections} onSubmit={handleSubmitVote} onBack={() => setStep(2)} />}
         {step === 4 && (
           <div className="text-center py-32 animate-in fade-in zoom-in duration-500">
@@ -1758,7 +2074,7 @@ function KioskAuth({ onAuth, addToast }) {
 
 function KioskBallot({ voter, candidates, selections, setSelections, onNext }) {
   const council = voter.grade <= 10 ? 'JHS' : 'SHS';
-  
+
   const eligibleCandidates = candidates.filter(c => {
     if(c.council !== council) return false;
     if(c.position === 'Grade Level Representative' && c.gradeLevel !== voter.grade) return false;
@@ -1766,8 +2082,17 @@ function KioskBallot({ voter, candidates, selections, setSelections, onNext }) {
   });
 
   const handleSelect = (pos, candId, isMulti) => {
+    // If selecting Abstain, clear all previous selections and just pick Abstain
+    if (candId === 'ABSTAIN') {
+      setSelections({...selections, [pos]: ['ABSTAIN']});
+      return;
+    }
+
+    let current = selections[pos] || [];
+    // Remove ABSTAIN if a candidate is chosen
+    current = current.filter(id => id !== 'ABSTAIN');
+
     if(isMulti) {
-      const current = selections[pos] || [];
       if(current.includes(candId)) {
         setSelections({...selections, [pos]: current.filter(id => id !== candId)});
       } else if(current.length < 2) {
@@ -1783,21 +2108,35 @@ function KioskBallot({ voter, candidates, selections, setSelections, onNext }) {
       {POSITIONS.map(pos => {
         const posCands = eligibleCandidates.filter(c => c.position === pos);
         if(posCands.length === 0) return null;
-        
+
         const isMulti = pos === 'Project Manager';
         const maxText = isMulti ? '(Select up to 2)' : '(Select 1)';
-        
+        const selectedIds = selections[pos] || [];
+
         return (
           <div key={pos} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden max-w-3xl mx-auto">
-            <div className="bg-[#16345f] text-white px-5 py-3 flex justify-between items-center">
-              <h3 className="text-base font-extrabold uppercase tracking-wider">{pos}</h3>
-              <p className="text-[#c6b26c] font-black text-[10px]">{maxText}</p>
+            
+            {/* Header style change for Project Manager to highlight 2 selections */}
+            <div className={`px-5 py-3 flex justify-between items-center ${isMulti ? 'bg-amber-600 text-white' : 'bg-[#16345f]' } text-white`}>
+              <div>
+                <h3 className="text-base font-extrabold uppercase tracking-wider">{pos}</h3>
+                {isMulti && <p className="text-xs text-amber-100 font-medium">Please select up to 2 candidates or choose to abstain</p>}
+              </div>
+              <p className="font-black text-[10px] tracking-widest uppercase bg-black/20 px-2 py-1 rounded">{maxText}</p>
             </div>
+
+            {/* Separator Box alert specifically for Project Managers */}
+            {isMulti && (
+              <div className="bg-amber-50 border-b border-amber-200 p-4 text-xs font-bold text-amber-800">
+                ⚠️ NOTICE: You can vote for TWO (2) different Project Managers below. To confirm, click on both candidates of your choice.
+              </div>
+            )}
+
             <div className="p-3 space-y-2">
               {posCands.map(c => {
-                const isSelected = (selections[pos] || []).includes(c.id);
+                const isSelected = selectedIds.includes(c.id);
                 const name = `${c.lastName}, ${c.firstName} ${c.middleName}`.trim();
-                
+
                 return (
                   <div key={c.id} onClick={() => handleSelect(pos, c.id, isMulti)} className={`p-3 rounded-xl border cursor-pointer transition-all flex justify-between items-center ${isSelected ? 'border-[#16345f] bg-blue-50/20 shadow-sm' : 'border-slate-100 hover:border-slate-300'}`}>
                     <div>
@@ -1810,11 +2149,23 @@ function KioskBallot({ voter, candidates, selections, setSelections, onNext }) {
                   </div>
                 );
               })}
+
+              {/* Strict Required Options - Added ABSTAIN Button */}
+              <div onClick={() => handleSelect(pos, 'ABSTAIN', false)} className={`p-3 rounded-xl border border-dashed cursor-pointer transition-all flex justify-between items-center ${selectedIds.includes('ABSTAIN') ? 'border-amber-500 bg-amber-50/20 shadow-sm' : 'border-slate-200 hover:border-slate-300'}`}>
+                <div>
+                  <div className={`text-sm font-bold uppercase ${selectedIds.includes('ABSTAIN') ? 'text-amber-800' : 'text-slate-500'}`}>ABSTAIN FROM VOTING</div>
+                  <div className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">NO PREFERENCE / CAST AN EMPTY BALLOT</div>
+                </div>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedIds.includes('ABSTAIN') ? 'border-amber-600 bg-amber-600' : 'border-slate-300'}`}>
+                  {selectedIds.includes('ABSTAIN') && <div className="w-2 h-2 bg-white rounded-full" />}
+                </div>
+              </div>
+
             </div>
           </div>
         );
       })}
-      
+
       <div className="mt-12 flex justify-center w-full max-w-3xl mx-auto">
         <button 
           onClick={onNext} 
@@ -1832,7 +2183,9 @@ function KioskBallot({ voter, candidates, selections, setSelections, onNext }) {
 function KioskReview({ candidates, selections, onSubmit, onBack }) {
   const getSelectedNames = (pos) => {
     const ids = selections[pos] || [];
-    if(ids.length === 0) return <span className="text-slate-400 italic font-medium">Abstain</span>;
+    if(ids.length === 0 || ids.includes('ABSTAIN')) {
+      return <span className="text-amber-600 font-extrabold italic bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-xs tracking-widest uppercase">ABSTAIN</span>;
+    }
     return ids.map(id => {
       const c = candidates.find(cand => cand.id === id);
       return `${c.lastName}, ${c.firstName} ${c.middleName}`.trim();
@@ -1840,12 +2193,12 @@ function KioskReview({ candidates, selections, onSubmit, onBack }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl overflow-hidden border-2 border-[#16345f] max-w-2xl mx-auto">
+    <div className="bg-white rounded-2xl shadow-xl overflow-hidden border-2 border-[#16345f] max-w-2xl mx-auto font-sans">
       <div className="bg-[#16345f] text-white p-6 text-center">
         <h2 className="text-2xl font-black uppercase tracking-widest mb-1">Review Ballot</h2>
         <p className="text-[#c6b26c] font-bold text-xs">Please verify your selections before casting your final vote.</p>
       </div>
-      
+
       <div className="p-6 space-y-4">
         {POSITIONS.map(pos => (
           <div key={pos} className="flex justify-between items-center border-b border-slate-100 pb-2">
@@ -1856,7 +2209,7 @@ function KioskReview({ candidates, selections, onSubmit, onBack }) {
           </div>
         ))}
       </div>
-      
+
       <div className="p-6 bg-slate-50 flex gap-4">
         <button onClick={onBack} className="flex-1 py-3 rounded-lg font-black text-[#16345f] border-2 border-[#16345f] hover:bg-[#16345f] hover:text-white transition uppercase tracking-widest text-sm">
           Go Back
@@ -1868,3 +2221,5 @@ function KioskReview({ candidates, selections, onSubmit, onBack }) {
     </div>
   );
 }
+
+```
