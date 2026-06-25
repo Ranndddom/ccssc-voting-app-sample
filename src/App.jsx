@@ -442,4 +442,1100 @@ function PublicDashboard({ config, user }) {
       <div className="max-w-7xl mx-auto px-6 md:px-12 py-24 space-y-24">
         {config.isResultsPublic ? (
           <>
-         
+            <div>
+              <div className="flex flex-col items-center justify-center mb-12">
+                <span className="px-4 py-1.5 rounded-full bg-[#16345f]/10 text-[#16345f] text-[10px] font-black tracking-widest uppercase mb-4 border border-[#16345f]/20 shadow-sm">
+                  Official Count
+                </span>
+                <h3 className="text-4xl md:text-5xl font-black text-[#16345f] tracking-tighter text-center">Junior High School</h3>
+                <div className="w-24 h-1.5 bg-[#c6b26c] mt-4 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {getCouncilPositions('JHS').map(pos => renderCandidatesGroup('JHS', pos))}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex flex-col items-center justify-center mb-12">
+                <span className="px-4 py-1.5 rounded-full bg-[#16345f]/10 text-[#16345f] text-[10px] font-black tracking-widest uppercase mb-4 border border-[#16345f]/20 shadow-sm">
+                  Official Candidates
+                </span>
+                <h3 className="text-4xl md:text-5xl font-black text-[#16345f] tracking-tighter text-center">Senior High School</h3>
+                <div className="w-24 h-1.5 bg-[#c6b26c] mt-4 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {getCouncilPositions('SHS').map(pos => renderCandidatesGroup('SHS', pos))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="max-w-3xl mx-auto bg-slate-50 border-2 border-slate-200 border-dashed rounded-3xl p-12 text-center shadow-inner">
+             <h3 className="text-3xl font-black text-[#16345f] mb-2">Tally Board Offline</h3>
+             <p className="text-slate-500 text-lg">The election commission has restricted public access to live results. Please check back when official transmission is active.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ icon, title, value, progress }) {
+  return (
+    <div className="bg-[#1e293b] rounded-2xl p-6 shadow-xl border border-slate-700/50 flex flex-col justify-center relative overflow-hidden min-h-[110px]">
+      {icon ? (
+        <div className="flex items-center gap-4">
+          <div className="bg-[#334155] p-3 rounded-xl shadow-inner">{icon}</div>
+          <div>
+            <div className="text-slate-400 text-[10px] md:text-xs font-bold tracking-widest uppercase mb-1">{title}</div>
+            <div className="text-3xl font-black text-white">{value}</div>
+          </div>
+        </div>
+      ) : (
+        <div className="w-full h-full flex flex-col justify-center">
+          <div className="flex justify-between items-end mb-3">
+             <div className="text-slate-400 text-[10px] md:text-xs font-bold tracking-widest uppercase">{title}</div>
+             <div className="text-3xl font-black text-white">{value}</div>
+          </div>
+          <div className="h-1.5 w-full bg-[#334155] rounded-full overflow-hidden">
+            <div className="h-full bg-[#c6b26c] transition-all duration-1000" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// LOGIN COMPONENT
+// ============================================================================
+function LoginScreen({ title, correctHash, onLogin }) {
+  const [pass, setPass] = useState('');
+  const [err, setErr] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const h = await hashPassword(pass);
+    if (h === correctHash) onLogin();
+    else { setErr('Invalid Credentials'); setPass(''); }
+  };
+
+  return (
+    <div className="min-h-[80vh] flex items-center justify-center px-4">
+      <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md border-t-8 border-[#16345f]">
+        <div className="flex justify-center mb-6">
+          <div className="w-16 h-16 bg-[#16345f] rounded-full flex items-center justify-center">
+            <Lock className="text-[#c6b26c] w-8 h-8" />
+          </div>
+        </div>
+        <h2 className="text-2xl font-black text-center text-[#16345f] mb-8 uppercase tracking-widest">{title}</h2>
+        {err && <div className="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm font-medium border border-red-200">{err}</div>}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Passkey</label>
+            <input type="password" value={pass} onChange={e => setPass(e.target.value)} className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-[#16345f] focus:outline-none transition-colors text-lg text-center" autoFocus />
+          </div>
+          <button type="submit" className="w-full bg-[#16345f] hover:bg-[#0b1a30] text-white font-bold py-4 rounded-lg transition-colors uppercase tracking-widest">
+            Authenticate
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 2. ADMIN & TABULATION PORTAL
+// ============================================================================
+function AdminPortal({ config, addToast, user }) {
+  const [authOk, setAuthOk] = useState(false);
+  const [tab, setTab] = useState('tabulate');
+
+  if (!authOk) return <LoginScreen title="Adviser Portal Access" correctHash={config.adminHash} onLogin={() => setAuthOk(true)} />;
+  if (config.isFirstLogin) return <AdminFirstSetup config={config} addToast={addToast} />;
+
+  return (
+    <div className="flex min-h-[calc(100vh-76px)] bg-slate-50 flex-col md:flex-row">
+      <aside className="w-full md:w-64 bg-white border-r border-slate-200 shadow-sm z-10 flex flex-col font-sans shrink-0">
+        <div className="p-6">
+          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Management Panel</h3>
+          <nav className="space-y-2">
+            <AdminTab id="tabulate" icon={<Upload/>} label="Forms Tabulator" current={tab} setTab={setTab} />
+            <AdminTab id="results" icon={<BarChart3/>} label="Official Results" current={tab} setTab={setTab} />
+            <AdminTab id="candidates" icon={<Users/>} label="Candidate Directory" current={tab} setTab={setTab} />
+            <AdminTab id="transmit" icon={<Activity/>} label="Transmission Stream" current={tab} setTab={setTab} />
+            <AdminTab id="setup" icon={<Settings/>} label="Credentials" current={tab} setTab={setTab} />
+          </nav>
+        </div>
+        <div className="mt-auto p-6 hidden md:block border-t border-slate-100">
+          <button onClick={() => setAuthOk(false)} className="flex items-center gap-2 text-slate-400 hover:text-red-500 transition font-medium w-full px-4 py-2 rounded-lg hover:bg-slate-50">
+            <LogOut className="w-4 h-4" /> Lock Adviser Terminal
+          </button>
+        </div>
+      </aside>
+
+      <main className="flex-1 p-4 md:p-10 overflow-y-auto w-full">
+        <div className="max-w-6xl mx-auto">
+          {tab === 'tabulate' && <AdminTabulateTab config={config} addToast={addToast} user={user} />}
+          {tab === 'results' && <AdminCertifiedResultsTab user={user} config={config} />}
+          {tab === 'candidates' && <AdminCandidatesTab addToast={addToast} user={user} />}
+          {tab === 'transmit' && <AdminTransmitTab config={config} addToast={addToast} user={user} />}
+          {tab === 'setup' && <AdminSetupTab config={config} addToast={addToast} />}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function AdminTab({ id, icon, label, current, setTab }) {
+  const active = current === id;
+  return (
+    <button onClick={() => setTab(id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all ${active ? 'bg-[#16345f] text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}>
+      {React.cloneElement(icon, { className: "w-5 h-5" })}
+      {label}
+    </button>
+  );
+}
+
+// --- ADMIN FIRST SETUP ---
+function AdminFirstSetup({ config, addToast }) {
+  const [pass1, setPass1] = useState('');
+  const [pass2, setPass2] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if(pass1 !== pass2) return addToast("Passwords do not match.", "error");
+    if(pass1.length < 6) return addToast("Password too short (min 6 characters).", "error");
+
+    setLoading(true);
+    const newHash = await hashPassword(pass1);
+    const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
+    await updateDoc(ref, { adminHash: newHash, isFirstLogin: false });
+    addToast("Initial Admin Setup complete.", "success");
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-[80vh] flex items-center justify-center bg-slate-50 px-4">
+      <div className="bg-white p-10 rounded-2xl shadow-xl w-full max-w-lg border-t-8 border-[#c6b26c]">
+        <ShieldAlert className="w-16 h-16 text-[#c6b26c] mx-auto mb-6" />
+        <h2 className="text-2xl font-black text-center text-[#16345f] mb-2 uppercase tracking-widest">Initial Setup Required</h2>
+        <p className="text-center text-slate-500 mb-8 text-sm">Please secure the Adviser account by changing the default system password.</p>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">New Password</label>
+            <input type="password" value={pass1} onChange={e=>setPass1(e.target.value)} required className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-[#16345f] outline-none font-medium text-center" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Confirm Password</label>
+            <input type="password" value={pass2} onChange={e=>setPass2(e.target.value)} required className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-[#16345f] outline-none font-medium text-center" />
+          </div>
+          <button disabled={loading} type="submit" className="w-full bg-[#16345f] text-white font-bold py-4 rounded-lg hover:bg-[#0b1a30] transition mt-6">
+            {loading ? 'Securing System...' : 'Update Password & Continue'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 3. TABULATION TAB (DYNAMIC CANDIDATE DETECTOR, COMPARATIVE PREVIEW)
+// ============================================================================
+function AdminTabulateTab({ config, addToast, user }) {
+  const [candidates, setCandidates] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(TAB_CATEGORIES[0]);
+  const [fileText, setFileText] = useState('');
+  
+  const [parsedBallotsCount, setParsedBallotsCount] = useState(0);
+  const [parsedCandidates, setParsedCandidates] = useState([]);
+
+  useEffect(() => {
+    if (!user) return;
+    const cRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates');
+    const unsub = onSnapshot(cRef, snap => {
+      const arr = [];
+      snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
+      setCandidates(arr);
+    }, (err) => console.error("Candidates error: ", err));
+    return () => unsub();
+  }, [user]);
+
+  const cleanName = (name) => {
+    if (!name) return '';
+    return name.toUpperCase().replace(/[.,]/g, '').replace(/\s+/g, ' ').trim();
+  };
+
+  const parseCSVLine = (line) => {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current);
+    return result;
+  };
+
+  const handleProcessData = () => {
+    if (!fileText.trim()) {
+      addToast("Please upload a file or paste spreadsheet results.", "error");
+      return;
+    }
+
+    const lines = fileText.split(/\r?\n/).filter(line => line.trim() !== '');
+    if (lines.length < 2) {
+      addToast("The spreadsheet must contain a header row and at least one response row.", "error");
+      return;
+    }
+
+    const firstLine = lines[0];
+    const isTab = firstLine.includes('\t');
+    const headers = isTab ? firstLine.split('\t') : parseCSVLine(firstLine);
+
+    const columnMappings = [];
+    headers.forEach((h, idx) => {
+      const cleanedHeader = h.toLowerCase();
+      let matchedPosition = null;
+
+      if (cleanedHeader.includes('president') && !cleanedHeader.includes('vice')) {
+        matchedPosition = 'President';
+      } else if (cleanedHeader.includes('vice president') || cleanedHeader.includes('vice-president')) {
+        matchedPosition = 'Vice President';
+      } else if (cleanedHeader.includes('secretary')) {
+        matchedPosition = 'Secretary';
+      } else if (cleanedHeader.includes('treasurer')) {
+        matchedPosition = 'Treasurer';
+      } else if (cleanedHeader.includes('auditor')) {
+        matchedPosition = 'Auditor';
+      } else if (cleanedHeader.includes('project manager') || cleanedHeader.includes('project-manager')) {
+        matchedPosition = 'Project Manager';
+      } else if (cleanedHeader.includes('representative') || cleanedHeader.includes('rep')) {
+        matchedPosition = selectedCategory.council === 'JHS' ? 'Grade Level Representative' : 'Strand Representative';
+      }
+
+      if (matchedPosition) {
+        columnMappings.push({ index: idx, position: matchedPosition });
+      }
+    });
+
+    if (columnMappings.length === 0) {
+      addToast("Could not automatically map any headers. Check if columns contain 'President', 'Secretary', 'Representative', etc.", "error");
+      return;
+    }
+
+    const votesCounter = {}; 
+    const detectedCandidatesMap = {}; 
+    let rowCount = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      const rowText = lines[i];
+      const row = isTab ? rowText.split('\t') : parseCSVLine(rowText);
+      if (row.length < columnMappings.length) continue;
+
+      rowCount++;
+
+      columnMappings.forEach(mapping => {
+        const cellValue = row[mapping.index];
+        if (!cellValue) return;
+
+        const cellItems = cellValue.split(';').map(item => item.trim()).filter(item => item !== '');
+
+        cellItems.forEach(item => {
+          let cleanedItem = item.trim();
+          if (!cleanedItem || cleanedItem.toLowerCase() === 'abstain' || cleanedItem.toLowerCase().includes('abstain')) {
+            return;
+          }
+
+          let partyList = 'INDEPENDENT';
+          const partyMatch = cleanedItem.match(/\(([^)]+)\)/);
+          if (partyMatch) {
+            partyList = partyMatch[1].toUpperCase().trim();
+            cleanedItem = cleanedItem.replace(/\([^)]+\)/, '').trim();
+          }
+
+          let cleanedNameText = cleanName(cleanedItem);
+          if (!cleanedNameText) return;
+
+          let firstName = '';
+          let lastName = '';
+          if (cleanedNameText.includes(',')) {
+            const parts = cleanedNameText.split(',');
+            lastName = parts[0].trim().toUpperCase();
+            firstName = parts[1].trim().toUpperCase();
+          } else {
+            const parts = cleanedNameText.split(/\s+/);
+            if (parts.length > 1) {
+              lastName = parts[parts.length - 1].trim().toUpperCase();
+              firstName = parts.slice(0, parts.length - 1).join(' ').trim().toUpperCase();
+            } else {
+              lastName = cleanedNameText.toUpperCase();
+              firstName = 'CANDIDATE';
+            }
+          }
+
+          const key = `${lastName}_${firstName}_${mapping.position}`.replace(/\s+/g, '_');
+
+          if (!detectedCandidatesMap[key]) {
+            detectedCandidatesMap[key] = {
+              firstName,
+              lastName,
+              position: mapping.position,
+              council: selectedCategory.council,
+              gradeLevel: (selectedCategory.council === 'JHS' && mapping.position === 'Grade Level Representative') ? Number(selectedCategory.level) : null,
+              strand: (selectedCategory.council === 'SHS' && mapping.position === 'Strand Representative') ? selectedCategory.level : null,
+              partyList
+            };
+          }
+
+          votesCounter[key] = (votesCounter[key] || 0) + 1;
+        });
+      });
+    }
+
+    const previewList = Object.keys(detectedCandidatesMap).map(key => {
+      const pCand = detectedCandidatesMap[key];
+      const votes = votesCounter[key] || 0;
+
+      const dbMatch = candidates.find(c => {
+        const matchName = cleanName(c.lastName) === cleanName(pCand.lastName) && cleanName(c.firstName) === cleanName(pCand.firstName);
+        const matchPos = c.position === pCand.position;
+        const matchGrade = pCand.gradeLevel ? c.gradeLevel === pCand.gradeLevel : true;
+        const matchStrand = pCand.strand ? c.strand === pCand.strand : true;
+        return matchName && matchPos && matchGrade && matchStrand;
+      });
+
+      return {
+        key,
+        ...pCand,
+        newVotes: votes,
+        dbId: dbMatch ? dbMatch.id : null,
+        currentDBVotes: dbMatch ? (dbMatch.voteCount || 0) : 0,
+        projectedVotes: dbMatch ? (dbMatch.voteCount || 0) + votes : votes,
+        isNew: !dbMatch
+      };
+    });
+
+    setParsedBallotsCount(rowCount);
+    setParsedCandidates(previewList);
+    addToast(`Successfully compiled ${rowCount} response records. Match matrix is shown below!`, "success");
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      setFileText(evt.target.result);
+      addToast(`CSV File loaded: ${file.name}. Review below!`, "success");
+    };
+    reader.readAsText(file);
+  };
+
+  const commitToDatabase = async () => {
+    if (parsedCandidates.length === 0) {
+      addToast("No parsed candidates to save. Process a spreadsheet first.", "error");
+      return;
+    }
+
+    try {
+      const batch = writeBatch(db);
+
+      for (const item of parsedCandidates) {
+        let finalId = item.dbId;
+
+        if (item.isNew) {
+          finalId = generateId();
+          const newCandRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', finalId);
+          batch.set(newCandRef, {
+            firstName: item.firstName,
+            lastName: item.lastName,
+            position: item.position,
+            council: item.council,
+            gradeLevel: item.gradeLevel,
+            strand: item.strand,
+            partyList: item.partyList,
+            voteCount: 0,
+            pendingVotes: item.newVotes,
+            initialVoteCount: 0,
+            targetVoteCount: item.newVotes
+          });
+        } else {
+          const existCandRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', finalId);
+          batch.update(existCandRef, {
+            pendingVotes: increment(item.newVotes)
+          });
+        }
+      }
+
+      const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
+      batch.update(configRef, {
+        totalUploadedBallots: increment(parsedBallotsCount)
+      });
+
+      await batch.commit();
+      addToast(`Successfully compiled ${parsedBallotsCount} ballots and updated candidate counts!`, "success");
+
+      setFileText('');
+      setParsedBallotsCount(0);
+      setParsedCandidates([]);
+    } catch (err) {
+      console.error(err);
+      addToast("Failed to commit entries to DB: " + err.message, "error");
+    }
+  };
+
+  return (
+    <div className="space-y-8 font-sans">
+      <div>
+        <h2 className="text-3xl font-black text-[#16345f] mb-2">Automated Forms Tabulator</h2>
+        <p className="text-slate-500">Adviser platform. Drops standard CSV exports to parse candidates dynamically and verify comparative results.</p>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <h3 className="font-bold text-lg text-[#16345f] mb-4">Step 1: Select Active Category</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+          {TAB_CATEGORIES.map(cat => {
+            const isSelected = selectedCategory.id === cat.id;
+            return (
+              <button 
+                key={cat.id} 
+                onClick={() => {
+                  setSelectedCategory(cat);
+                  setFileText('');
+                  setParsedBallotsCount(0);
+                  setParsedCandidates([]);
+                }}
+                className={`py-2.5 px-3 text-xs font-black rounded-lg transition-all border ${
+                  isSelected 
+                    ? 'bg-[#16345f] text-[#c6b26c] border-[#16345f] shadow' 
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                }`}
+              >
+                {cat.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm lg:col-span-5 space-y-6">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+            <h3 className="font-bold text-lg text-[#16345f] flex items-center gap-2">
+              <Upload className="w-5 h-5 text-[#c6b26c]" /> Load Spreadsheet Data
+            </h3>
+            <span className="text-xs bg-[#16345f] text-white px-2 py-1 rounded font-bold uppercase">{selectedCategory.label}</span>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-center w-full">
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:bg-slate-50 transition">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  <Upload className="w-8 h-8 text-slate-400 mb-2" />
+                  <p className="text-sm font-bold text-slate-600">Choose Google Forms .csv</p>
+                  <p className="text-xs text-slate-400 mt-1">UTF-8 comma-separated files</p>
+                </div>
+                <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+              </label>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                <div className="w-full border-t border-slate-200" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase font-mono font-bold">
+                <span className="bg-white px-3 text-slate-400">or paste columns manually</span>
+              </div>
+            </div>
+
+            <div>
+              <textarea 
+                value={fileText}
+                onChange={e => setFileText(e.target.value)}
+                placeholder="Paste columns copied directly from your Google Form responses sheet here..."
+                className="w-full h-40 p-3 border-2 border-slate-200 focus:border-[#16345f] rounded-xl outline-none font-mono text-xs text-slate-700 bg-slate-50"
+              />
+            </div>
+
+            <button 
+              onClick={handleProcessData}
+              className="w-full bg-[#16345f] hover:bg-[#0b1a30] text-white font-extrabold py-3 rounded-xl transition uppercase tracking-widest text-xs"
+            >
+              Process and Tabulate
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm lg:col-span-7 space-y-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h3 className="font-bold text-lg text-[#16345f] flex items-center gap-2">
+              <Clipboard className="w-5 h-5 text-[#c6b26c]" /> Comparative Tally Preview
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">Verify dynamic candidate mappings, current DB counts, and projected final totals.</p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 flex justify-between items-center">
+              <div>
+                <span className="text-xs font-bold text-slate-400 uppercase block tracking-wider">Responses/Ballots Counted</span>
+                <span className="text-3xl font-black text-[#16345f] font-mono">{parsedBallotsCount}</span>
+              </div>
+              {parsedCandidates.length > 0 && (
+                <div className="bg-amber-100 text-[#16345f] px-3 py-1.5 rounded-lg border border-[#c6b26c]/30 text-xs font-bold uppercase tracking-wider flex items-center gap-1 animate-pulse">
+                  Ready to Commit
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Automatic Candidate Comparison Map</span>
+              <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-96 overflow-y-auto bg-white">
+                {parsedCandidates.map(c => (
+                  <div key={c.key} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 text-sm hover:bg-slate-50 transition">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-[#16345f] text-base">{c.lastName}, {c.firstName}</span>
+                        {c.isNew ? (
+                          <span className="bg-blue-100 text-blue-700 text-[9px] font-black tracking-wider uppercase px-2 py-0.5 rounded">AUTO-CREATE</span>
+                        ) : (
+                          <span className="bg-green-100 text-green-700 text-[9px] font-black tracking-wider uppercase px-2 py-0.5 rounded">MATCHED DB</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mt-1">
+                        {c.position} {c.gradeLevel ? `(Gr. ${c.gradeLevel})` : c.strand ? `(${c.strand})` : ''} • {c.partyList}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-center">
+                      <div className="w-16 bg-slate-50 p-1.5 rounded border border-slate-100">
+                        <span className="text-[9px] text-slate-400 font-bold block uppercase">CURRENT</span>
+                        <span className="font-mono text-xs font-black text-slate-600">{c.currentDBVotes}</span>
+                      </div>
+                      <span className="text-slate-300 font-bold text-xs">+</span>
+                      <div className="w-16 bg-blue-50/50 p-1.5 rounded border border-blue-100">
+                        <span className="text-[9px] text-blue-500 font-bold block uppercase">NEW CSV</span>
+                        <span className="font-mono text-xs font-black text-blue-600">+{c.newVotes}</span>
+                      </div>
+                      <span className="text-slate-300 font-bold text-xs">=</span>
+                      <div className="w-16 bg-emerald-50 p-1.5 rounded border border-emerald-100">
+                        <span className="text-[9px] text-emerald-600 font-bold block uppercase">PROJECTED</span>
+                        <span className="font-mono text-xs font-black text-emerald-700">{c.projectedVotes}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {parsedCandidates.length === 0 && (
+                  <p className="text-center p-8 text-xs text-slate-400 italic font-medium">No tabulated results processed. Load or paste a file in the sidebar to run the auto-mapper.</p>
+                )}
+              </div>
+            </div>
+
+            <button 
+              onClick={commitToDatabase}
+              disabled={parsedCandidates.length === 0}
+              className={`w-full py-4 rounded-xl font-black transition-all uppercase tracking-widest text-sm flex items-center justify-center gap-2 ${
+                parsedCandidates.length > 0 
+                  ? 'bg-[#16345f] text-white hover:bg-[#0b1a30] shadow-xl' 
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              <CheckCircle className="w-5 h-5 text-[#c6b26c]"/> Confirm and Save to Database
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 4. CERTIFIED RESULTS TAB (UNAFFECTED BY PUBLIC/PRIVATE FLAGS)
+// ============================================================================
+function AdminCertifiedResultsTab({ user, config }) {
+  const [candidates, setCandidates] = useState([]);
+
+  useEffect(() => {
+    if (!user) return;
+    const cRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates');
+    const unsub = onSnapshot(cRef, snap => {
+      const arr = [];
+      snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
+      setCandidates(arr);
+    }, (err) => console.error("Candidates certified snapshot error: ", err));
+    return () => unsub();
+  }, [user]);
+
+  const renderOfficialCertifiedPositions = (council) => {
+    const positions = getCouncilPositions(council);
+    
+    return (
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden space-y-6 p-6">
+        <h3 className="text-xl font-extrabold text-[#16345f] border-b pb-3 border-slate-100 flex justify-between items-center">
+          <span>{council === 'JHS' ? 'Junior High School' : 'Senior High School'} Official Ledger</span>
+          <span className="text-xs font-mono bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold border border-emerald-200">BYPASS MODE ACTIVE</span>
+        </h3>
+
+        {positions.map(pos => {
+          const cands = candidates.filter(c => {
+            if (c.council !== council) return false;
+            if (pos.endsWith("Representative")) {
+              if (council === 'JHS') {
+                const grade = parseInt(pos.split(" ")[1], 10);
+                return c.position === "Grade Level Representative" && c.gradeLevel === grade;
+              } else {
+                const strand = pos.split(" ")[0];
+                return c.position === "Strand Representative" && c.strand === strand;
+              }
+            }
+            return c.position === pos;
+          });
+
+          if (cands.length === 0) return null;
+
+          const sortedCands = [...cands].sort((a,b) => (b.voteCount || 0) - (a.voteCount || 0));
+
+          return (
+            <div key={pos} className="space-y-2 border-b border-slate-50 last:border-0 pb-4 last:pb-0">
+              <span className="text-xs font-black text-slate-400 tracking-wider uppercase block">{pos}</span>
+              <div className="space-y-1.5">
+                {sortedCands.map((c, idx) => (
+                  <div key={c.id} className="flex justify-between items-center text-sm p-2 rounded hover:bg-slate-50">
+                    <div>
+                      <span className="font-bold text-[#16345f]">{c.lastName}, {c.firstName}</span>
+                      <span className="text-[10px] text-slate-400 font-mono ml-2 uppercase">({c.partyList || 'IND'})</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {idx === 0 && <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold border border-emerald-100 px-1.5 py-0.5 rounded">1ST</span>}
+                      {idx === 1 && pos.includes("Representative") && council === 'SHS' && (
+                        <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold border border-emerald-100 px-1.5 py-0.5 rounded">2ND</span>
+                      )}
+                      <span className="font-mono font-black text-sm bg-slate-100 border px-3 py-1 rounded min-w-[3rem] text-center text-slate-700">
+                        {c.voteCount || 0}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-8 font-sans">
+      <div>
+        <h2 className="text-3xl font-black text-[#16345f] mb-2">Official Certified Results Ledger</h2>
+        <p className="text-slate-500">Unrestricted system tally bypass. Displays actual, absolute database records regardless of public offline configurations.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {renderOfficialCertifiedPositions('JHS')}
+        {renderOfficialCertifiedPositions('SHS')}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 5. CANDIDATE DIRECTORY (VIEW ONLY LISTING, ABILITY TO DELETE)
+// ============================================================================
+function AdminCandidatesTab({ addToast, user }) {
+  const [candidates, setCandidates] = useState([]);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const cRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates');
+    const unsub = onSnapshot(cRef, snap => {
+      const arr = [];
+      snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
+      setCandidates(arr);
+    }, (err) => console.error("Candidates error: ", err));
+    return () => unsub();
+  }, [user]);
+
+  const executeDelete = async (id) => {
+    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', id));
+    addToast("Candidate deleted successfully.", "success");
+    setConfirmDeleteId(null);
+  };
+
+  const sortCandidates = (list) => {
+    return [...list].sort((a, b) => {
+      const orderA = POSITION_ORDER[a.position] || 99;
+      const orderB = POSITION_ORDER[b.position] || 99;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.lastName.localeCompare(b.lastName);
+    });
+  };
+
+  const jhsCandidates = useMemo(() => sortCandidates(candidates.filter(c => c.council === 'JHS')), [candidates]);
+  const shsCandidates = useMemo(() => sortCandidates(candidates.filter(c => c.council === 'SHS')), [candidates]);
+
+  return (
+    <div className="space-y-8 font-sans">
+      <div>
+        <h2 className="text-3xl font-black text-[#16345f] mb-2">Candidate Directory</h2>
+        <p className="text-slate-500">View and manage registered candidates automatically extracted from your Google Forms uploads.</p>
+      </div>
+
+      {/* JHS Candidates Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="bg-[#16345f] px-6 py-4">
+          <h3 className="font-extrabold text-white text-lg">Junior High School Candidates</h3>
+        </div>
+        <table className="w-full text-left">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="p-4 text-xs font-bold text-slate-500 uppercase">Name</th>
+              <th className="p-4 text-xs font-bold text-slate-500 uppercase">Position & Level</th>
+              <th className="p-4 text-xs font-bold text-slate-500 uppercase">Party</th>
+              <th className="p-4 text-xs font-bold text-slate-500 uppercase text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {jhsCandidates.map(c => (
+              <tr key={c.id} className="hover:bg-slate-50">
+                <td className="p-4 font-bold text-[#16345f]">{c.lastName}, {c.firstName} {c.middleName || ''}</td>
+                <td className="p-4 text-sm"><span className="bg-slate-200 px-2 py-1 rounded text-xs font-bold mr-2">{c.position}</span>{c.gradeLevel ? `(Gr. ${c.gradeLevel})` : ''}</td>
+                <td className="p-4 text-sm font-mono">{c.partyList || 'IND'}</td>
+                <td className="p-4 text-right">
+                  {confirmDeleteId === c.id ? (
+                    <div className="inline-flex items-center gap-2">
+                      <button onClick={() => executeDelete(c.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-3 py-1.5 rounded transition">Confirm</button>
+                      <button onClick={() => setConfirmDeleteId(null)} className="bg-slate-200 text-slate-700 text-xs px-3 py-1.5 rounded transition">Cancel</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setConfirmDeleteId(c.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {jhsCandidates.length === 0 && (
+              <tr>
+                <td colSpan="4" className="text-center py-6 text-slate-400 font-medium text-sm">No registered JHS candidates. Try uploading a JHS Google Forms .csv in the tabulator.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* SHS Candidates Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="bg-[#16345f] px-6 py-4">
+          <h3 className="font-extrabold text-white text-lg">Senior High School Candidates</h3>
+        </div>
+        <table className="w-full text-left">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="p-4 text-xs font-bold text-slate-500 uppercase">Name</th>
+              <th className="p-4 text-xs font-bold text-slate-500 uppercase">Position & Strand</th>
+              <th className="p-4 text-xs font-bold text-slate-500 uppercase">Party</th>
+              <th className="p-4 text-xs font-bold text-slate-500 uppercase text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {shsCandidates.map(c => (
+              <tr key={c.id} className="hover:bg-slate-50">
+                <td className="p-4 font-bold text-[#16345f]">{c.lastName}, {c.firstName} {c.middleName || ''}</td>
+                <td className="p-4 text-sm"><span className="bg-slate-200 px-2 py-1 rounded text-xs font-bold mr-2">{c.position}</span>{c.strand ? `(${c.strand})` : ''}</td>
+                <td className="p-4 text-sm font-mono">{c.partyList || 'IND'}</td>
+                <td className="p-4 text-right">
+                  {confirmDeleteId === c.id ? (
+                    <div className="inline-flex items-center gap-2">
+                      <button onClick={() => executeDelete(c.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-3 py-1.5 rounded transition">Confirm</button>
+                      <button onClick={() => setConfirmDeleteId(null)} className="bg-slate-200 text-slate-700 text-xs px-3 py-1.5 rounded transition">Cancel</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setConfirmDeleteId(c.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {shsCandidates.length === 0 && (
+              <tr>
+                <td colSpan="4" className="text-center py-6 text-slate-400 font-medium text-sm">No registered SHS candidates. Try uploading an SHS Google Forms .csv in the tabulator.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 6. TRANSMISSION CONTROLS (STEADY ANIMATED COMMITS)
+// ============================================================================
+function AdminTransmitTab({ config, addToast, user }) {
+  const [candidates, setCandidates] = useState([]);
+  const [confirmTransmit, setConfirmTransmit] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+  const [resetCode, setResetCode] = useState('');
+
+  useEffect(() => {
+    if (!user) return;
+    const cRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates');
+    const unsub = onSnapshot(cRef, snap => {
+      const arr = [];
+      snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
+      setCandidates(arr);
+    }, (err) => console.error("Candidates error: ", err));
+    return () => unsub();
+  }, [user]);
+
+  const totalUploadedBallots = config.totalUploadedBallots || 0;
+  const transmittedCount = config.transmittedBallotsCount || 0;
+  const totalPendingBallots = Math.max(0, totalUploadedBallots - transmittedCount);
+
+  // Active state calculations
+  const elapsed = Date.now() - config.transmissionStartTime;
+  const transmittedNow = Math.floor(elapsed / 1000);
+  const targetTransmission = config.targetTransmittedBallotsCount || 0;
+  const initialTransmission = config.initialTransmittedBallotsCount || 0;
+  const isFinished = transmittedNow >= (targetTransmission - initialTransmission);
+
+  const handleTransmit = async () => {
+    if(totalPendingBallots === 0) return addToast("No pending ballots to transmit.", "error");
+
+    const batch = writeBatch(db);
+    const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
+
+    batch.update(configRef, {
+      isTransmitting: true,
+      transmissionStartTime: Date.now(),
+      initialTransmittedBallotsCount: transmittedCount,
+      targetTransmittedBallotsCount: totalUploadedBallots,
+      transmittedBallotsCount: totalUploadedBallots
+    });
+
+    candidates.forEach(c => {
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', c.id);
+      const current = c.voteCount || 0;
+      const pending = c.pendingVotes || 0;
+      batch.update(ref, {
+        initialVoteCount: current,
+        targetVoteCount: current + pending,
+        voteCount: current + pending, 
+        pendingVotes: 0 
+      });
+    });
+
+    await batch.commit();
+    setConfirmTransmit(false);
+    addToast("Data transmission stream initialized! Publishing 1 ballot per second...", "success");
+  };
+
+  const handleStopTransmission = async () => {
+    const batch = writeBatch(db);
+    const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
+    
+    const newTransmittedCount = Math.min(targetTransmission, initialTransmission + transmittedNow);
+    
+    batch.update(configRef, {
+      isTransmitting: false,
+      transmittedBallotsCount: newTransmittedCount,
+      targetTransmittedBallotsCount: newTransmittedCount
+    });
+    
+    candidates.forEach(c => {
+      const diff = (c.targetVoteCount || 0) - (c.initialVoteCount || 0);
+      const revealed = Math.min(transmittedNow, diff);
+      const currentVote = (c.initialVoteCount || 0) + revealed;
+      const remaining = diff - revealed;
+      
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', c.id);
+      batch.update(ref, {
+        voteCount: currentVote,
+        targetVoteCount: currentVote,
+        initialVoteCount: currentVote,
+        pendingVotes: remaining
+      });
+    });
+    
+    await batch.commit();
+    addToast("Transmission feed paused. Progress saved securely.", "success");
+  };
+
+  const togglePublicResults = async () => {
+    try {
+      const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
+      await updateDoc(configRef, { isResultsPublic: !config.isResultsPublic });
+      addToast(config.isResultsPublic ? "Live Tally Board hidden from the public homepage." : "Live Tally Board published to homepage successfully.", "success");
+    } catch (e) {
+      addToast("Failed to modify public visibility status.", "error");
+    }
+  };
+
+  const handleReset = async () => {
+    if(resetCode !== 'RESET') {
+       return addToast("Invalid confirmation entry. Please enter 'RESET'.", "error");
+    }
+
+    try {
+      const batch = writeBatch(db);
+
+      const cSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates'));
+      cSnap.forEach(cDoc => { batch.delete(cDoc.ref); });
+
+      const defaultAdminHash = await hashPassword('admin2026');
+      const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
+      batch.update(configRef, {
+        adminHash: defaultAdminHash,
+        isFirstLogin: true,
+        isTransmitting: false,
+        transmissionStartTime: 0,
+        isResultsPublic: false,
+        transmittedBallotsCount: 0,
+        initialTransmittedBallotsCount: 0,
+        targetTransmittedBallotsCount: 0,
+        totalUploadedBallots: 0
+      });
+
+      await batch.commit();
+      setShowReset(false);
+      setResetCode('');
+      addToast("System fully formatted. Default credentials restored successfully.", "success");
+    } catch (err) {
+      console.error("Reset error: ", err);
+      addToast("Format process failed: " + err.message, "error");
+    }
+  };
+
+  return (
+    <div className="space-y-8 font-sans">
+      <div>
+        <h2 className="text-3xl font-black text-[#16345f] mb-2">Transmission Streams</h2>
+        <p className="text-slate-500">Initialize and feed certified voter data packets directly onto the homepage tally dashboard.</p>
+      </div>
+
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 text-center">
+        <Activity className="w-16 h-16 text-[#c6b26c] mx-auto mb-4" />
+        <div className="text-6xl font-black text-[#16345f] mb-2 font-mono">{totalPendingBallots.toLocaleString()}</div>
+        <div className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-8 font-sans">Ballots Pending Transmission</div>
+
+        {config.isTransmitting && isFinished ? (
+           <div className="w-full max-w-sm mx-auto block py-4 rounded-xl font-bold uppercase tracking-widest bg-emerald-100 text-emerald-700 border border-emerald-300 flex justify-center items-center gap-2 text-xs">
+             <CheckCircle className="w-5 h-5"/> All Channels Transmitted
+           </div>
+        ) : config.isTransmitting ? (
+           <button 
+             onClick={handleStopTransmission}
+             className="w-full max-w-sm mx-auto py-4 rounded-xl font-bold uppercase tracking-widest transition-all bg-red-600 hover:bg-red-700 text-white shadow-xl flex justify-center items-center gap-2 text-xs"
+           >
+             <StopCircle className="w-5 h-5"/> Pause Stream Transmission
+           </button>
+        ) : !confirmTransmit ? (
+          <button 
+            onClick={() => setConfirmTransmit(true)}
+            disabled={totalPendingBallots === 0}
+            className={`w-full max-w-sm mx-auto block py-4 rounded-xl font-bold uppercase tracking-widest transition-all text-xs ${
+              totalPendingBallots > 0 
+                ? 'bg-[#16345f] text-white hover:bg-[#0b1a30] shadow-xl hover:-translate-y-0.5' 
+                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+            }`}
+          >
+            Start Transmission Sync
+          </button>
+        ) : (
+          <div className="flex gap-4 justify-center max-w-sm mx-auto">
+            <button onClick={handleTransmit} className="flex-1 bg-emerald-600 text-white font-bold py-4 rounded-xl uppercase tracking-widest shadow-lg hover:bg-emerald-700 text-xs">Confirm</button>
+            <button onClick={() => setConfirmTransmit(false)} className="flex-1 bg-slate-200 text-slate-700 font-bold py-4 rounded-xl uppercase tracking-widest hover:bg-slate-300 text-xs">Cancel</button>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h4 className="font-bold text-[#16345f]">Public Board Visibility Toggle</h4>
+          <p className="text-sm text-slate-500">Allow standard users to browse the finalized counts on the homepage.</p>
+        </div>
+        <button 
+          onClick={togglePublicResults}
+          className={`px-6 py-3 rounded-lg font-bold shadow-sm transition whitespace-nowrap flex items-center gap-2 text-xs ${
+            config.isResultsPublic 
+              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300' 
+              : 'bg-slate-200 text-slate-700 hover:bg-slate-300 border border-slate-300'
+          }`}
+        >
+          {config.isResultsPublic ? <><Eye className="w-4 h-4"/> Public (Online)</> : <><EyeOff className="w-4 h-4"/> Hidden (Offline)</>}
+        </button>
+      </div>
+
+      <div className="bg-red-50 p-6 rounded-xl border border-red-200 mt-12 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h4 className="font-bold text-red-700">Danger Zone: Full Format Reset</h4>
+          <p className="text-sm text-red-600/80">Permanently purge all candidates, totals, streams, and restore default credential hashes.</p>
+        </div>
+
+        {!showReset ? (
+          <button onClick={() => setShowReset(true)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-sm transition whitespace-nowrap text-xs">
+            Erase Election Data
+          </button>
+        ) : (
+          <div className="flex gap-2">
+            <input 
+              type="text" placeholder="Type RESET" value={resetCode} onChange={(e)=>setResetCode(e.target.value)}
+              className="px-4 py-2 border border-red-300 rounded-lg outline-none focus:border-red-500 font-bold w-32 text-center text-xs"
+            />
+            <button onClick={handleReset} className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg text-xs">Verify</button>
+            <button onClick={() => setShowReset(false)} className="bg-red-200 text-red-800 font-bold px-4 py-2 rounded-lg text-xs">Cancel</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 7. SYSTEM CREDENTIALS AND ACCESS SETUP
+// ============================================================================
+function AdminSetupTab({ config, addToast }) {
+  const [newAdmin, setNewAdmin] = useState('');
+
+  const changeAdmin = async () => {
+    if(!newAdmin) return;
+    const h = await hashPassword(newAdmin);
+    const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
+    await updateDoc(ref, { adminHash: h });
+    setNewAdmin('');
+    addToast("Adviser system passkey successfully updated.", "success");
+  };
+
+  return (
+    <div className="space-y-8 font-sans">
+      <div>
+        <h2 className="text-3xl font-black text-[#16345f] mb-2">Access Credentials</h2>
+        <p className="text-slate-500">Configure core passwords and local security keys.</p>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Lock className="w-5 h-5 text-[#c6b26c]"/> Adviser Security Passkey</h3>
+        <div className="space-y-4">
+          <div className="flex gap-4">
+            <input type="password" placeholder="New Adviser Password" value={newAdmin} onChange={e=>setNewAdmin(e.target.value)} className="flex-1 p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-[#16345f]" />
+            <button onClick={changeAdmin} className="w-48 bg-slate-800 hover:bg-[#16345f] text-white font-bold py-3 px-6 rounded-lg transition text-xs">Update Passkey</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
