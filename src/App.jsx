@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ShieldAlert, Users, CheckCircle, 
   Settings, LogOut, Lock, Activity, AlertCircle, X, TrendingUp,
-  BarChart3, EyeOff, Eye, StopCircle, Upload, Clipboard, Check, Trash2
+  BarChart3, EyeOff, Eye, StopCircle, Upload, Clipboard, Check, Trash2, PieChart
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -86,7 +86,7 @@ const getCouncilPositions = (council) => {
   }
 };
 
-// --- ERROR BOUNDARY TO PREVENT WHITE SCREENS ---
+// --- ERROR BOUNDARY ---
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -109,7 +109,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// --- TOAST NOTIFICATION COMPONENT ---
+// --- TOAST NOTIFICATIONS ---
 function ToastContainer({ toasts }) {
   return (
     <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-3 pointer-events-none">
@@ -277,7 +277,7 @@ export default function AppWrapper() {
 }
 
 // ============================================================================
-// 1. PUBLIC DASHBOARD (TALLY BOARD WITH REBUILT PROPORTIONAL ANIMATION ENGINE)
+// 1. PUBLIC DASHBOARD (PROPORTIONAL ANIMATION ENGINE)
 // ============================================================================
 function PublicDashboard({ config, user }) {
   const [candidates, setCandidates] = useState([]);
@@ -650,7 +650,7 @@ function AdminFirstSetup({ config, addToast }) {
 }
 
 // ============================================================================
-// 3. TABULATION TAB (DYNAMIC CANDIDATE DETECTOR, COMPARATIVE PREVIEW)
+// 3. TABULATION TAB (STRICT CANDIDATE MATCHING)
 // ============================================================================
 function AdminTabulateTab({ config, addToast, user }) {
   const [candidates, setCandidates] = useState([]);
@@ -712,9 +712,13 @@ function AdminTabulateTab({ config, addToast, user }) {
     const headers = isTab ? firstLine.split('\t') : parseCSVLine(firstLine);
 
     const columnMappings = [];
+    
+    // Improved, strict header matching to prevent candidate mixing
     headers.forEach((h, idx) => {
       const cleanedHeader = h.toLowerCase();
       let matchedPosition = null;
+      let specificGrade = null;
+      let specificStrand = null;
 
       if (cleanedHeader.includes('president') && !cleanedHeader.includes('vice')) {
         matchedPosition = 'President';
@@ -729,11 +733,37 @@ function AdminTabulateTab({ config, addToast, user }) {
       } else if (cleanedHeader.includes('project manager') || cleanedHeader.includes('project-manager')) {
         matchedPosition = 'Project Manager';
       } else if (cleanedHeader.includes('representative') || cleanedHeader.includes('rep')) {
-        matchedPosition = selectedCategory.council === 'JHS' ? 'Grade Level Representative' : 'Strand Representative';
+        // Look for specific grades to separate reps correctly
+        if (cleanedHeader.includes(' 7') || cleanedHeader.includes('seven')) specificGrade = 7;
+        else if (cleanedHeader.includes(' 8') || cleanedHeader.includes('eight')) specificGrade = 8;
+        else if (cleanedHeader.includes(' 9') || cleanedHeader.includes('nine')) specificGrade = 9;
+        else if (cleanedHeader.includes(' 10') || cleanedHeader.includes('ten')) specificGrade = 10;
+        else if (cleanedHeader.includes('11') || cleanedHeader.includes('eleven')) specificGrade = 11;
+        else if (cleanedHeader.includes('12') || cleanedHeader.includes('twelve')) specificGrade = 12;
+        
+        // Look for specific strands
+        if (cleanedHeader.includes('abm')) specificStrand = 'ABM';
+        else if (cleanedHeader.includes('stem')) specificStrand = 'STEM';
+        else if (cleanedHeader.includes('humss')) specificStrand = 'HUMSS';
+        else if (cleanedHeader.includes('gas')) specificStrand = 'GAS';
+        
+        if (specificGrade) {
+          matchedPosition = 'Grade Level Representative';
+        } else if (specificStrand) {
+          matchedPosition = 'Strand Representative';
+        } else {
+          // If totally generic, assume the selected category
+          matchedPosition = selectedCategory.council === 'JHS' ? 'Grade Level Representative' : 'Strand Representative';
+        }
       }
 
       if (matchedPosition) {
-        columnMappings.push({ index: idx, position: matchedPosition });
+        columnMappings.push({ 
+          index: idx, 
+          position: matchedPosition,
+          gradeLevel: specificGrade || (matchedPosition === 'Grade Level Representative' ? Number(selectedCategory.level) : null),
+          strand: specificStrand || (matchedPosition === 'Strand Representative' ? selectedCategory.level : null)
+        });
       }
     });
 
@@ -792,7 +822,11 @@ function AdminTabulateTab({ config, addToast, user }) {
             }
           }
 
-          const key = `${lastName}_${firstName}_${mapping.position}`.replace(/\s+/g, '_');
+          const pCandGrade = mapping.gradeLevel;
+          const pCandStrand = mapping.strand;
+
+          // Highly strict unique key to guarantee candidates don't mix up across grades/strands
+          const key = `${lastName}_${firstName}_${mapping.position}_${pCandGrade || 'NA'}_${pCandStrand || 'NA'}`.replace(/\s+/g, '_');
 
           if (!detectedCandidatesMap[key]) {
             detectedCandidatesMap[key] = {
@@ -800,8 +834,8 @@ function AdminTabulateTab({ config, addToast, user }) {
               lastName,
               position: mapping.position,
               council: selectedCategory.council,
-              gradeLevel: (selectedCategory.council === 'JHS' && mapping.position === 'Grade Level Representative') ? Number(selectedCategory.level) : null,
-              strand: (selectedCategory.council === 'SHS' && mapping.position === 'Strand Representative') ? selectedCategory.level : null,
+              gradeLevel: pCandGrade,
+              strand: pCandStrand,
               partyList
             };
           }
@@ -820,7 +854,8 @@ function AdminTabulateTab({ config, addToast, user }) {
         const matchPos = c.position === pCand.position;
         const matchGrade = pCand.gradeLevel ? c.gradeLevel === pCand.gradeLevel : true;
         const matchStrand = pCand.strand ? c.strand === pCand.strand : true;
-        return matchName && matchPos && matchGrade && matchStrand;
+        const matchCouncil = c.council === pCand.council;
+        return matchName && matchPos && matchGrade && matchStrand && matchCouncil;
       });
 
       return {
@@ -828,8 +863,7 @@ function AdminTabulateTab({ config, addToast, user }) {
         ...pCand,
         newVotes: votes,
         dbId: dbMatch ? dbMatch.id : null,
-        currentDBVotes: dbMatch ? (dbMatch.voteCount || 0) : 0,
-        projectedVotes: dbMatch ? (dbMatch.voteCount || 0) + votes : votes,
+        currentDBVotes: dbMatch ? (dbMatch.voteCount || 0) + (dbMatch.pendingVotes || 0) : 0,
         isNew: !dbMatch
       };
     });
@@ -849,7 +883,6 @@ function AdminTabulateTab({ config, addToast, user }) {
       addToast(`CSV File loaded: ${file.name}. Review below!`, "success");
     };
     reader.readAsText(file);
-    // Reset value to allow uploading same file again
     e.target.value = null; 
   };
 
@@ -861,9 +894,11 @@ function AdminTabulateTab({ config, addToast, user }) {
 
     try {
       const batch = writeBatch(db);
+      const categoryLabel = selectedCategory.label;
 
       for (const item of parsedCandidates) {
         let finalId = item.dbId;
+        const breakdownKey = `breakdown.${categoryLabel}`;
 
         if (item.isNew) {
           finalId = generateId();
@@ -879,12 +914,14 @@ function AdminTabulateTab({ config, addToast, user }) {
             voteCount: 0,
             pendingVotes: item.newVotes,
             initialVoteCount: 0,
-            targetVoteCount: item.newVotes
+            targetVoteCount: item.newVotes,
+            breakdown: { [categoryLabel]: item.newVotes }
           });
         } else {
           const existCandRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', finalId);
           batch.update(existCandRef, {
-            pendingVotes: increment(item.newVotes)
+            pendingVotes: increment(item.newVotes),
+            [breakdownKey]: increment(item.newVotes)
           });
         }
       }
@@ -1074,7 +1111,7 @@ function AdminTabulateTab({ config, addToast, user }) {
 }
 
 // ============================================================================
-// 4. CERTIFIED RESULTS TAB (UNAFFECTED BY PUBLIC/PRIVATE FLAGS)
+// 4. CERTIFIED RESULTS TAB (IMMEDIATE DB RECORD, NO TRANSMISSION DELAY)
 // ============================================================================
 function AdminCertifiedResultsTab({ user, config }) {
   const [candidates, setCandidates] = useState([]);
@@ -1116,29 +1153,37 @@ function AdminCertifiedResultsTab({ user, config }) {
 
           if (cands.length === 0) return null;
 
-          const sortedCands = [...cands].sort((a,b) => (b.voteCount || 0) - (a.voteCount || 0));
+          // Directly uses Absolute Votes (voteCount + pendingVotes) instantly bypassing transmission animation!
+          const sortedCands = [...cands].sort((a,b) => {
+            const absoluteB = (b.voteCount || 0) + (b.pendingVotes || 0);
+            const absoluteA = (a.voteCount || 0) + (a.pendingVotes || 0);
+            return absoluteB - absoluteA;
+          });
 
           return (
             <div key={pos} className="space-y-2 border-b border-slate-50 last:border-0 pb-4 last:pb-0">
               <span className="text-xs font-black text-slate-400 tracking-wider uppercase block">{pos}</span>
               <div className="space-y-1.5">
-                {sortedCands.map((c, idx) => (
-                  <div key={c.id} className="flex justify-between items-center text-sm p-2 rounded hover:bg-slate-50">
-                    <div>
-                      <div className="font-bold text-[#16345f]">{c.lastName}, {c.firstName}</div>
-                      <div className="text-[10px] text-slate-400 font-bold tracking-widest mt-0.5 uppercase">{c.partyList || 'INDEPENDENT'}</div>
+                {sortedCands.map((c, idx) => {
+                  const absoluteTotal = (c.voteCount || 0) + (c.pendingVotes || 0);
+                  return (
+                    <div key={c.id} className="flex justify-between items-center text-sm p-2 rounded hover:bg-slate-50">
+                      <div>
+                        <div className="font-bold text-[#16345f]">{c.lastName}, {c.firstName}</div>
+                        <div className="text-[10px] text-slate-400 font-bold tracking-widest mt-0.5 uppercase">{c.partyList || 'INDEPENDENT'}</div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {idx === 0 && <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold border border-emerald-100 px-1.5 py-0.5 rounded">1ST</span>}
+                        {idx === 1 && pos.includes("Representative") && council === 'SHS' && (
+                          <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold border border-emerald-100 px-1.5 py-0.5 rounded">2ND</span>
+                        )}
+                        <span className="font-mono font-black text-sm bg-slate-100 border px-3 py-1 rounded min-w-[3rem] text-center text-slate-700">
+                          {absoluteTotal}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      {idx === 0 && <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold border border-emerald-100 px-1.5 py-0.5 rounded">1ST</span>}
-                      {idx === 1 && pos.includes("Representative") && council === 'SHS' && (
-                        <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold border border-emerald-100 px-1.5 py-0.5 rounded">2ND</span>
-                      )}
-                      <span className="font-mono font-black text-sm bg-slate-100 border px-3 py-1 rounded min-w-[3rem] text-center text-slate-700">
-                        {c.voteCount || 0}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
@@ -1151,7 +1196,7 @@ function AdminCertifiedResultsTab({ user, config }) {
     <div className="space-y-8 font-sans">
       <div>
         <h2 className="text-3xl font-black text-[#16345f] mb-2">Official Certified Results Ledger</h2>
-        <p className="text-slate-500">Displays actual, absolute database records regardless of public offline configurations.</p>
+        <p className="text-slate-500">Displays absolute real-time database records immediately upon saving, unaffected by public transmission delays.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1163,11 +1208,12 @@ function AdminCertifiedResultsTab({ user, config }) {
 }
 
 // ============================================================================
-// 5. CANDIDATE DIRECTORY (VIEW ONLY LISTING, ABILITY TO DELETE)
+// 5. CANDIDATE DIRECTORY & ANALYTICS
 // ============================================================================
 function AdminCandidatesTab({ addToast, user }) {
   const [candidates, setCandidates] = useState([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [viewCandidate, setViewCandidate] = useState(null);
 
   useEffect(() => {
     if (!user) return;
@@ -1184,6 +1230,7 @@ function AdminCandidatesTab({ addToast, user }) {
     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', id));
     addToast("Candidate deleted successfully.", "success");
     setConfirmDeleteId(null);
+    if(viewCandidate && viewCandidate.id === id) setViewCandidate(null);
   };
 
   const sortCandidates = (list) => {
@@ -1198,11 +1245,79 @@ function AdminCandidatesTab({ addToast, user }) {
   const jhsCandidates = useMemo(() => sortCandidates(candidates.filter(c => c.council === 'JHS')), [candidates]);
   const shsCandidates = useMemo(() => sortCandidates(candidates.filter(c => c.council === 'SHS')), [candidates]);
 
+  const renderAnalyticsModal = () => {
+    if (!viewCandidate) return null;
+    const c = viewCandidate;
+    const absoluteTotal = (c.voteCount || 0) + (c.pendingVotes || 0);
+    const breakdown = c.breakdown || {};
+    const entries = Object.entries(breakdown).map(([label, value]) => ({label, value})).sort((a,b) => b.value - a.value);
+    
+    // Dynamic Conic Gradient calculation for pie chart
+    const colors = ['#16345f', '#c6b26c', '#34d399', '#60a5fa', '#fbbf24', '#f87171', '#a78bfa'];
+    let currentPercent = 0;
+    const totalForPie = entries.reduce((s, e) => s + e.value, 0) || 1;
+    const gradientStops = entries.map((entry, i) => {
+      const percent = (entry.value / totalForPie) * 100;
+      const stop = `${colors[i % colors.length]} ${currentPercent}% ${currentPercent + percent}%`;
+      currentPercent += percent;
+      return stop;
+    });
+    const pieStyle = { background: gradientStops.length > 0 ? `conic-gradient(${gradientStops.join(', ')})` : '#e2e8f0' };
+
+    return (
+      <div className="fixed inset-0 bg-[#0f172a]/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-200">
+          <div className="bg-[#16345f] p-6 relative">
+             <button onClick={() => setViewCandidate(null)} className="absolute top-6 right-6 text-white/70 hover:text-white transition"><X className="w-6 h-6"/></button>
+             <h3 className="text-3xl font-black text-white">{c.lastName}, {c.firstName}</h3>
+             <p className="text-[#c6b26c] font-bold tracking-widest uppercase text-sm mt-1">{c.position} {c.gradeLevel ? `(Grade ${c.gradeLevel})` : c.strand ? `(${c.strand})` : ''} • {c.partyList || 'INDEPENDENT'}</p>
+          </div>
+
+          <div className="p-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+              
+              <div className="flex flex-col items-center justify-center p-6 bg-slate-50 border-2 border-slate-100 rounded-2xl">
+                 <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Total Votes Garnered</div>
+                 <div className="text-6xl font-black text-[#16345f] font-mono tracking-tighter">{absoluteTotal.toLocaleString()}</div>
+                 {c.pendingVotes > 0 && <div className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-1 rounded mt-3 uppercase tracking-wider">{c.pendingVotes} Pending Transmission</div>}
+              </div>
+
+              <div>
+                <h4 className="font-bold text-[#16345f] mb-4 border-b border-slate-100 pb-2 flex items-center gap-2"><PieChart className="w-4 h-4 text-[#c6b26c]" /> Voter Demographics</h4>
+                
+                {entries.length > 0 ? (
+                  <div className="flex gap-6 items-center">
+                    <div className="w-32 h-32 rounded-full shadow-inner border border-slate-200 shrink-0 transform hover:scale-105 transition-transform" style={pieStyle}></div>
+                    <div className="flex-1 space-y-2">
+                      {entries.map((entry, i) => (
+                        <div key={entry.label} className="flex justify-between items-center text-xs">
+                           <div className="flex items-center gap-2">
+                             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[i % colors.length] }}></div>
+                             <span className="font-bold text-slate-700">{entry.label}</span>
+                           </div>
+                           <span className="font-mono font-black text-slate-500">{entry.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-400 italic">No breakdown data available.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-8 font-sans">
+      {renderAnalyticsModal()}
+
       <div>
         <h2 className="text-3xl font-black text-[#16345f] mb-2">Candidate Directory</h2>
-        <p className="text-slate-500">View and manage registered candidates automatically extracted from your Google Forms uploads.</p>
+        <p className="text-slate-500">View registered candidates. Click on any candidate's row to open their detailed voting analytics and demographics.</p>
       </div>
 
       {/* JHS Candidates Table */}
@@ -1221,18 +1336,18 @@ function AdminCandidatesTab({ addToast, user }) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {jhsCandidates.map(c => (
-              <tr key={c.id} className="hover:bg-slate-50">
+              <tr key={c.id} onClick={() => setViewCandidate(c)} className="hover:bg-blue-50 cursor-pointer transition-colors">
                 <td className="p-4 font-bold text-[#16345f]">{c.lastName}, {c.firstName} {c.middleName || ''}</td>
                 <td className="p-4 text-sm"><span className="bg-slate-200 px-2 py-1 rounded text-xs font-bold mr-2">{c.position}</span>{c.gradeLevel ? `(Gr. ${c.gradeLevel})` : ''}</td>
                 <td className="p-4 text-sm font-mono">{c.partyList || 'IND'}</td>
                 <td className="p-4 text-right">
                   {confirmDeleteId === c.id ? (
-                    <div className="inline-flex items-center gap-2">
+                    <div className="inline-flex items-center gap-2" onClick={e=>e.stopPropagation()}>
                       <button onClick={() => executeDelete(c.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-3 py-1.5 rounded transition">Confirm</button>
                       <button onClick={() => setConfirmDeleteId(null)} className="bg-slate-200 text-slate-700 text-xs px-3 py-1.5 rounded transition">Cancel</button>
                     </div>
                   ) : (
-                    <button onClick={() => setConfirmDeleteId(c.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete">
+                    <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(c.id); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
@@ -1264,18 +1379,18 @@ function AdminCandidatesTab({ addToast, user }) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {shsCandidates.map(c => (
-              <tr key={c.id} className="hover:bg-slate-50">
+              <tr key={c.id} onClick={() => setViewCandidate(c)} className="hover:bg-blue-50 cursor-pointer transition-colors">
                 <td className="p-4 font-bold text-[#16345f]">{c.lastName}, {c.firstName} {c.middleName || ''}</td>
                 <td className="p-4 text-sm"><span className="bg-slate-200 px-2 py-1 rounded text-xs font-bold mr-2">{c.position}</span>{c.strand ? `(${c.strand})` : ''}</td>
                 <td className="p-4 text-sm font-mono">{c.partyList || 'IND'}</td>
                 <td className="p-4 text-right">
                   {confirmDeleteId === c.id ? (
-                    <div className="inline-flex items-center gap-2">
+                    <div className="inline-flex items-center gap-2" onClick={e=>e.stopPropagation()}>
                       <button onClick={() => executeDelete(c.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-3 py-1.5 rounded transition">Confirm</button>
                       <button onClick={() => setConfirmDeleteId(null)} className="bg-slate-200 text-slate-700 text-xs px-3 py-1.5 rounded transition">Cancel</button>
                     </div>
                   ) : (
-                    <button onClick={() => setConfirmDeleteId(c.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete">
+                    <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(c.id); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
@@ -1295,7 +1410,7 @@ function AdminCandidatesTab({ addToast, user }) {
 }
 
 // ============================================================================
-// 6. TRANSMISSION CONTROLS (STEADY ANIMATED COMMITS)
+// 6. TRANSMISSION CONTROLS
 // ============================================================================
 function AdminTransmitTab({ config, addToast, user }) {
   const [candidates, setCandidates] = useState([]);
