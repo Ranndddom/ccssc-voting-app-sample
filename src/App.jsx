@@ -68,13 +68,13 @@ const POSITION_ORDER = {
 };
 
 const TAB_CATEGORIES = [
-  { id: 'jhs_g7', label: 'JHS Grade 7', council: 'JHS', level: '7', type: 'grade' },
-  { id: 'jhs_g8', label: 'JHS Grade 8', council: 'JHS', level: '8', type: 'grade' },
-  { id: 'jhs_g9', label: 'JHS Grade 9', council: 'JHS', level: '9', type: 'grade' },
-  { id: 'jhs_g10', label: 'JHS Grade 10', council: 'JHS', level: '10', type: 'grade' },
-  { id: 'shs_abm', label: 'SHS ABM Strand', council: 'SHS', level: 'ABM', type: 'strand' },
-  { id: 'shs_stem', label: 'SHS STEM Strand', council: 'SHS', level: 'STEM', type: 'strand' },
-  { id: 'shs_humss', label: 'SHS HUMSS Strand', council: 'SHS', level: 'HUMSS', type: 'strand' },
+  { id: 'jhs_g7', label: 'Grade 7', council: 'JHS', level: '7', type: 'grade' },
+  { id: 'jhs_g8', label: 'Grade 8', council: 'JHS', level: '8', type: 'grade' },
+  { id: 'jhs_g9', label: 'Grade 9', council: 'JHS', level: '9', type: 'grade' },
+  { id: 'jhs_g10', label: 'Grade 10', council: 'JHS', level: '10', type: 'grade' },
+  { id: 'shs_abm', label: 'ABM Strand', council: 'SHS', level: 'ABM', type: 'strand' },
+  { id: 'shs_stem', label: 'STEM Strand', council: 'SHS', level: 'STEM', type: 'strand' },
+  { id: 'shs_humss', label: 'HUMSS Strand', council: 'SHS', level: 'HUMSS', type: 'strand' },
 ];
 
 const getCouncilPositions = (council) => {
@@ -223,7 +223,7 @@ function App() {
           </div>
           <div>
             <h1 className="font-bold tracking-wider leading-tight text-white text-base md:text-lg">
-              CCSSC <span className="text-[#c6b26c]">TABULATOR</span>
+              CCSSC <span className="text-[#c6b26c]">RESULTS</span>
             </h1>
             <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">Electoral Transmission Platform 2026</p>
           </div>
@@ -268,7 +268,6 @@ function App() {
   );
 }
 
-// Wrap the app to prevent white screens on hard runtime crashes
 export default function AppWrapper() {
   return (
     <ErrorBoundary>
@@ -278,7 +277,7 @@ export default function AppWrapper() {
 }
 
 // ============================================================================
-// 1. PUBLIC DASHBOARD (TALLY BOARD WITH REBUILT ANIMATION ENGINE)
+// 1. PUBLIC DASHBOARD (TALLY BOARD WITH REBUILT PROPORTIONAL ANIMATION ENGINE)
 // ============================================================================
 function PublicDashboard({ config, user }) {
   const [candidates, setCandidates] = useState([]);
@@ -295,13 +294,14 @@ function PublicDashboard({ config, user }) {
     return () => unsub();
   }, [user]);
 
+  // Faster ticker for smooth proportional animation updates
   useEffect(() => {
     if (!config.isTransmitting) return;
-    const interval = setInterval(() => { setTicker(t => t + 1); }, 500);
+    const interval = setInterval(() => { setTicker(t => t + 1); }, 100);
     return () => clearInterval(interval);
   }, [config.isTransmitting]);
 
-  // Core Real-time Vote Interpolator Engine
+  // Core Real-time Vote Interpolator Engine - By Voter Staggered Simulation
   const displayData = useMemo(() => {
     const votes = {};
     if (!config.isTransmitting) {
@@ -310,17 +310,26 @@ function PublicDashboard({ config, user }) {
     }
 
     const elapsed = Date.now() - (config.transmissionStartTime || Date.now());
-    const studentBallotsTransmitted = Math.max(0, Math.floor(elapsed / 1000));
+    const elapsedSeconds = Math.max(0, elapsed / 1000);
 
     const initialBallots = config.initialTransmittedBallotsCount || 0;
     const targetBallots = config.targetTransmittedBallotsCount || 0;
-    const currentBallotsAnimated = Math.min(targetBallots, initialBallots + studentBallotsTransmitted);
+    const totalBallotsDiff = Math.max(0, targetBallots - initialBallots);
+
+    // Using totalBallotsDiff directly as duration ensures roughly 1 ballot per second overall
+    const duration = totalBallotsDiff > 0 ? totalBallotsDiff : 1;
+    // Cap progress at exactly 1 to prevent overshoot when finished
+    const progress = Math.min(1, elapsedSeconds / duration);
+
+    const currentBallotsAnimated = initialBallots + Math.floor(progress * totalBallotsDiff);
 
     candidates.forEach(c => {
       const initial = c.initialVoteCount || 0;
       const target = c.targetVoteCount || 0;
       const diff = Math.max(0, target - initial);
-      const revealed = Math.min(diff, studentBallotsTransmitted);
+      
+      // Proportional reveal means candidates with more votes tick up faster, simulating individual randomized votes
+      const revealed = Math.floor(progress * diff);
       votes[c.id] = initial + revealed;
     });
 
@@ -445,7 +454,7 @@ function PublicDashboard({ config, user }) {
             <div>
               <div className="flex flex-col items-center justify-center mb-12">
                 <span className="px-4 py-1.5 rounded-full bg-[#16345f]/10 text-[#16345f] text-[10px] font-black tracking-widest uppercase mb-4 border border-[#16345f]/20 shadow-sm">
-                  Official Count
+                  Official Candidates
                 </span>
                 <h3 className="text-4xl md:text-5xl font-black text-[#16345f] tracking-tighter text-center">Junior High School</h3>
                 <div className="w-24 h-1.5 bg-[#c6b26c] mt-4 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
@@ -709,7 +718,7 @@ function AdminTabulateTab({ config, addToast, user }) {
 
       if (cleanedHeader.includes('president') && !cleanedHeader.includes('vice')) {
         matchedPosition = 'President';
-      } else if (cleanedHeader.includes('vice president') || cleanedHeader.includes('vice-president')) {
+      } else if (cleanedHeader.includes('vice') && cleanedHeader.includes('president')) {
         matchedPosition = 'Vice President';
       } else if (cleanedHeader.includes('secretary')) {
         matchedPosition = 'Secretary';
@@ -757,7 +766,7 @@ function AdminTabulateTab({ config, addToast, user }) {
           }
 
           let partyList = 'INDEPENDENT';
-          const partyMatch = cleanedItem.match(/\(([^)]+)\)/);
+          const partyMatch = cleanedItem.match(/\((.*?)\)/);
           if (partyMatch) {
             partyList = partyMatch[1].toUpperCase().trim();
             cleanedItem = cleanedItem.replace(/\([^)]+\)/, '').trim();
@@ -840,6 +849,8 @@ function AdminTabulateTab({ config, addToast, user }) {
       addToast(`CSV File loaded: ${file.name}. Review below!`, "success");
     };
     reader.readAsText(file);
+    // Reset value to allow uploading same file again
+    e.target.value = null; 
   };
 
   const commitToDatabase = async () => {
@@ -904,28 +915,42 @@ function AdminTabulateTab({ config, addToast, user }) {
 
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h3 className="font-bold text-lg text-[#16345f] mb-4">Step 1: Select Active Category</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
-          {TAB_CATEGORIES.map(cat => {
-            const isSelected = selectedCategory.id === cat.id;
-            return (
-              <button 
-                key={cat.id} 
-                onClick={() => {
-                  setSelectedCategory(cat);
-                  setFileText('');
-                  setParsedBallotsCount(0);
-                  setParsedCandidates([]);
-                }}
-                className={`py-2.5 px-3 text-xs font-black rounded-lg transition-all border ${
-                  isSelected 
-                    ? 'bg-[#16345f] text-[#c6b26c] border-[#16345f] shadow' 
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                }`}
-              >
-                {cat.label}
-              </button>
-            )
-          })}
+        
+        <div className="space-y-5">
+          <div>
+             <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Junior High School Level</h4>
+             <div className="flex flex-wrap gap-2">
+                {TAB_CATEGORIES.filter(cat => cat.council === 'JHS').map(cat => {
+                  const isSelected = selectedCategory.id === cat.id;
+                  return (
+                    <button 
+                      key={cat.id} 
+                      onClick={() => { setSelectedCategory(cat); setFileText(''); setParsedBallotsCount(0); setParsedCandidates([]); }}
+                      className={`py-2 px-4 text-xs font-black rounded-lg transition-all border ${isSelected ? 'bg-[#16345f] text-[#c6b26c] border-[#16345f] shadow' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'}`}
+                    >
+                      {cat.label}
+                    </button>
+                  )
+                })}
+             </div>
+          </div>
+          <div>
+             <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Senior High School Level</h4>
+             <div className="flex flex-wrap gap-2">
+                {TAB_CATEGORIES.filter(cat => cat.council === 'SHS').map(cat => {
+                  const isSelected = selectedCategory.id === cat.id;
+                  return (
+                    <button 
+                      key={cat.id} 
+                      onClick={() => { setSelectedCategory(cat); setFileText(''); setParsedBallotsCount(0); setParsedCandidates([]); }}
+                      className={`py-2 px-4 text-xs font-black rounded-lg transition-all border ${isSelected ? 'bg-[#16345f] text-[#c6b26c] border-[#16345f] shadow' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'}`}
+                    >
+                      {cat.label}
+                    </button>
+                  )
+                })}
+             </div>
+          </div>
         </div>
       </div>
 
@@ -940,13 +965,13 @@ function AdminTabulateTab({ config, addToast, user }) {
 
           <div className="space-y-4">
             <div className="flex items-center justify-center w-full">
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:bg-slate-50 transition">
+              <label htmlFor="csv-upload" className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:bg-slate-50 transition">
                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
                   <Upload className="w-8 h-8 text-slate-400 mb-2" />
                   <p className="text-sm font-bold text-slate-600">Choose Google Forms .csv</p>
                   <p className="text-xs text-slate-400 mt-1">UTF-8 comma-separated files</p>
                 </div>
-                <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+                <input id="csv-upload" type="file" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/plain" className="hidden" onChange={handleFileUpload} />
               </label>
             </div>
 
@@ -982,7 +1007,7 @@ function AdminTabulateTab({ config, addToast, user }) {
             <h3 className="font-bold text-lg text-[#16345f] flex items-center gap-2">
               <Clipboard className="w-5 h-5 text-[#c6b26c]" /> Comparative Tally Preview
             </h3>
-            <p className="text-xs text-slate-400 mt-1">Verify dynamic candidate mappings, current DB counts, and projected final totals.</p>
+            <p className="text-xs text-slate-400 mt-1">Verify dynamic candidate mappings and incremented votes cleanly before saving.</p>
           </div>
 
           <div className="space-y-4">
@@ -1004,33 +1029,21 @@ function AdminTabulateTab({ config, addToast, user }) {
                 {parsedCandidates.map(c => (
                   <div key={c.key} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 text-sm hover:bg-slate-50 transition">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-[#16345f] text-base">{c.lastName}, {c.firstName}</span>
-                        {c.isNew ? (
-                          <span className="bg-blue-100 text-blue-700 text-[9px] font-black tracking-wider uppercase px-2 py-0.5 rounded">AUTO-CREATE</span>
-                        ) : (
-                          <span className="bg-green-100 text-green-700 text-[9px] font-black tracking-wider uppercase px-2 py-0.5 rounded">MATCHED DB</span>
-                        )}
-                      </div>
+                      <div className="font-bold text-[#16345f] text-base">{c.lastName}, {c.firstName}</div>
                       <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mt-1">
                         {c.position} {c.gradeLevel ? `(Gr. ${c.gradeLevel})` : c.strand ? `(${c.strand})` : ''} • {c.partyList}
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-4 text-center">
-                      <div className="w-16 bg-slate-50 p-1.5 rounded border border-slate-100">
-                        <span className="text-[9px] text-slate-400 font-bold block uppercase">CURRENT</span>
-                        <span className="font-mono text-xs font-black text-slate-600">{c.currentDBVotes}</span>
+                    <div className="flex items-center gap-6 text-center">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-bold block uppercase">Current</span>
+                        <span className="font-mono text-sm font-black text-slate-600">{c.currentDBVotes}</span>
                       </div>
-                      <span className="text-slate-300 font-bold text-xs">+</span>
-                      <div className="w-16 bg-blue-50/50 p-1.5 rounded border border-blue-100">
-                        <span className="text-[9px] text-blue-500 font-bold block uppercase">NEW CSV</span>
-                        <span className="font-mono text-xs font-black text-blue-600">+{c.newVotes}</span>
-                      </div>
-                      <span className="text-slate-300 font-bold text-xs">=</span>
-                      <div className="w-16 bg-emerald-50 p-1.5 rounded border border-emerald-100">
-                        <span className="text-[9px] text-emerald-600 font-bold block uppercase">PROJECTED</span>
-                        <span className="font-mono text-xs font-black text-emerald-700">{c.projectedVotes}</span>
+                      <span className="text-slate-300 font-bold">+</span>
+                      <div>
+                        <span className="text-[10px] text-blue-500 font-bold block uppercase">New</span>
+                        <span className="font-mono text-sm font-black text-blue-600">{c.newVotes}</span>
                       </div>
                     </div>
                   </div>
@@ -1084,7 +1097,6 @@ function AdminCertifiedResultsTab({ user, config }) {
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden space-y-6 p-6">
         <h3 className="text-xl font-extrabold text-[#16345f] border-b pb-3 border-slate-100 flex justify-between items-center">
           <span>{council === 'JHS' ? 'Junior High School' : 'Senior High School'} Official Ledger</span>
-          <span className="text-xs font-mono bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold border border-emerald-200">BYPASS MODE ACTIVE</span>
         </h3>
 
         {positions.map(pos => {
@@ -1113,8 +1125,8 @@ function AdminCertifiedResultsTab({ user, config }) {
                 {sortedCands.map((c, idx) => (
                   <div key={c.id} className="flex justify-between items-center text-sm p-2 rounded hover:bg-slate-50">
                     <div>
-                      <span className="font-bold text-[#16345f]">{c.lastName}, {c.firstName}</span>
-                      <span className="text-[10px] text-slate-400 font-mono ml-2 uppercase">({c.partyList || 'IND'})</span>
+                      <div className="font-bold text-[#16345f]">{c.lastName}, {c.firstName}</div>
+                      <div className="text-[10px] text-slate-400 font-bold tracking-widest mt-0.5 uppercase">{c.partyList || 'INDEPENDENT'}</div>
                     </div>
                     <div className="flex items-center gap-3">
                       {idx === 0 && <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold border border-emerald-100 px-1.5 py-0.5 rounded">1ST</span>}
@@ -1139,7 +1151,7 @@ function AdminCertifiedResultsTab({ user, config }) {
     <div className="space-y-8 font-sans">
       <div>
         <h2 className="text-3xl font-black text-[#16345f] mb-2">Official Certified Results Ledger</h2>
-        <p className="text-slate-500">Unrestricted system tally bypass. Displays actual, absolute database records regardless of public offline configurations.</p>
+        <p className="text-slate-500">Displays actual, absolute database records regardless of public offline configurations.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1307,11 +1319,16 @@ function AdminTransmitTab({ config, addToast, user }) {
   const totalPendingBallots = Math.max(0, totalUploadedBallots - transmittedCount);
 
   // Active state calculations
-  const elapsed = Date.now() - config.transmissionStartTime;
-  const transmittedNow = Math.floor(elapsed / 1000);
+  const elapsed = Date.now() - (config.transmissionStartTime || Date.now());
+  const elapsedSeconds = Math.max(0, elapsed / 1000);
   const targetTransmission = config.targetTransmittedBallotsCount || 0;
   const initialTransmission = config.initialTransmittedBallotsCount || 0;
-  const isFinished = transmittedNow >= (targetTransmission - initialTransmission);
+  
+  const maxDiff = Math.max(0, targetTransmission - initialTransmission);
+  const progress = maxDiff === 0 ? 1 : Math.min(1, elapsedSeconds / maxDiff);
+  const transmittedNow = Math.floor(progress * maxDiff);
+
+  const isFinished = config.isTransmitting && progress >= 1;
 
   const handleTransmit = async () => {
     if(totalPendingBallots === 0) return addToast("No pending ballots to transmit.", "error");
@@ -1341,7 +1358,7 @@ function AdminTransmitTab({ config, addToast, user }) {
 
     await batch.commit();
     setConfirmTransmit(false);
-    addToast("Data transmission stream initialized! Publishing 1 ballot per second...", "success");
+    addToast("Data transmission stream initialized! Publishing proportional votes smoothly...", "success");
   };
 
   const handleStopTransmission = async () => {
@@ -1357,8 +1374,8 @@ function AdminTransmitTab({ config, addToast, user }) {
     });
     
     candidates.forEach(c => {
-      const diff = (c.targetVoteCount || 0) - (c.initialVoteCount || 0);
-      const revealed = Math.min(transmittedNow, diff);
+      const diff = Math.max(0, (c.targetVoteCount || 0) - (c.initialVoteCount || 0));
+      const revealed = Math.floor(progress * diff);
       const currentVote = (c.initialVoteCount || 0) + revealed;
       const remaining = diff - revealed;
       
@@ -1432,7 +1449,7 @@ function AdminTransmitTab({ config, addToast, user }) {
         <div className="text-6xl font-black text-[#16345f] mb-2 font-mono">{totalPendingBallots.toLocaleString()}</div>
         <div className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-8 font-sans">Ballots Pending Transmission</div>
 
-        {config.isTransmitting && isFinished ? (
+        {isFinished ? (
            <div className="w-full max-w-sm mx-auto block py-4 rounded-xl font-bold uppercase tracking-widest bg-emerald-100 text-emerald-700 border border-emerald-300 flex justify-center items-center gap-2 text-xs">
              <CheckCircle className="w-5 h-5"/> All Channels Transmitted
            </div>
@@ -1539,3 +1556,5 @@ function AdminSetupTab({ config, addToast }) {
     </div>
   );
 }
+
+
