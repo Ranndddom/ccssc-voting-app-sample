@@ -212,7 +212,7 @@ function App() {
         >
           <div className={`w-10 h-10 border border-[#c6b26c] rounded-lg flex items-center justify-center overflow-hidden ${isHome ? 'bg-transparent' : 'bg-white p-1'}`}>
             <img 
-              src="src/assets/Logo.png" 
+              src="https://i.postimg.cc/sXmyRV7V/Logo.png" 
               alt="Logo" 
               className="w-full h-full object-contain"
               onError={(e) => {
