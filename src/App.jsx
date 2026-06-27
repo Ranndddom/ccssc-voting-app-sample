@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  ShieldAlert, Users, CheckCircle,
+  ShieldAlert, Users, CheckCircle, ShieldCheck, MonitorPlay, Printer,
   Settings, LogOut, Lock, Activity, AlertCircle, X, TrendingUp,
   BarChart3, EyeOff, Eye, StopCircle, Upload, Clipboard, Trash2, PieChart, Award, Medal
 } from 'lucide-react';
@@ -86,6 +86,20 @@ const getCouncilPositions = (council) => {
   }
 };
 
+// Map JHS and SHS positions together for synced TV View cycling
+const TV_STAGES = [
+  { jhs: "President", shs: "President" },
+  { jhs: "Vice President", shs: "Vice President" },
+  { jhs: "Secretary", shs: "Secretary" },
+  { jhs: "Treasurer", shs: "Treasurer" },
+  { jhs: "Auditor", shs: "Auditor" },
+  { jhs: "Project Manager", shs: "Project Manager" },
+  { jhs: "Grade 7 Representative", shs: "ABM Representative" },
+  { jhs: "Grade 8 Representative", shs: "STEM Representative" },
+  { jhs: "Grade 9 Representative", shs: "HUMSS Representative" },
+  { jhs: "Grade 10 Representative", shs: null }
+];
+
 // --- ERROR BOUNDARY ---
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -112,7 +126,7 @@ class ErrorBoundary extends React.Component {
 // --- TOAST NOTIFICATIONS ---
 function ToastContainer({ toasts }) {
   return (
-    <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-3 pointer-events-none">
+    <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-3 pointer-events-none print:hidden">
       {toasts.map(t => (
         <div key={t.id} className={`flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl animate-in slide-in-from-right fade-in pointer-events-auto border ${t.type === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-slate-200 text-[#16345f]'}`}>
           {t.type === 'error' ? <AlertCircle className="w-5 h-5 text-red-500" /> : <CheckCircle className="w-5 h-5 text-green-500" />}
@@ -196,12 +210,17 @@ function App() {
   };
 
   const isHome = view === 'home';
+  const isTV = view === 'tv';
+
+  if (isTV) {
+    return <TelevisionView config={safeConfig} user={user} setView={setView} />;
+  }
 
   return (
-    <div className="min-h-screen font-sans bg-white text-slate-900 flex flex-col">
+    <div className="min-h-screen font-sans bg-white text-slate-900 flex flex-col print:bg-white">
       <ToastContainer toasts={toasts} />
 
-      <header className={`${isHome ? 'bg-[#0f172a] border-none text-white' : 'bg-[#16345f] text-white'} p-4 md:px-8 flex items-center justify-between relative z-50 transition-colors shadow-sm`}>
+      <header className={`print:hidden ${isHome ? 'bg-[#0f172a] border-none text-white' : 'bg-[#16345f] text-white'} p-4 md:px-8 flex items-center justify-between relative z-50 transition-colors shadow-sm`}>
         <div 
           className="flex items-center gap-3 cursor-pointer select-none"
           onClick={() => {
@@ -210,9 +229,9 @@ function App() {
           }}
           title="Security Protected Zone"
         >
-          <div className={`w-10 h-10 border-none rounded-xl flex items-center justify-center overflow-hidden shadow-sm bg-transparent`}>
+          <div className={`w-10 h-10 border-2 border-[#c6b26c] rounded-xl flex items-center justify-center overflow-hidden shadow-sm ${isHome ? 'bg-transparent' : 'bg-white p-1'}`}>
             <img 
-              src="src/assets/Logo.png" 
+              src="src/assets/logo.png" 
               alt="Logo" 
               className="w-full h-full object-contain"
               onError={(e) => {
@@ -242,13 +261,16 @@ function App() {
       </header>
 
       {showHiddenNav && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100]">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] print:hidden">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 border-t-4 border-[#c6b26c]">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-[#16345f]">System Access</h2>
               <button onClick={() => setShowHiddenNav(false)}><X className="text-slate-400 hover:text-red-500" /></button>
             </div>
             <div className="space-y-3">
+              <button onClick={() => { setView('tv'); setShowHiddenNav(false); }} className="w-full text-left px-4 py-3 bg-slate-100 hover:bg-[#16345f] hover:text-white rounded-lg font-medium transition flex items-center gap-3">
+                <MonitorPlay className="w-5 h-5" /> Television View
+              </button>
               <button onClick={() => { setView('admin'); setShowHiddenNav(false); }} className="w-full text-left px-4 py-3 bg-slate-100 hover:bg-[#16345f] hover:text-white rounded-lg font-medium transition flex items-center gap-3">
                 <ShieldAlert className="w-5 h-5" /> Adviser Portal
               </button>
@@ -369,7 +391,6 @@ function PublicDashboard({ config, user }) {
           )}
         </div>
 
-        {/* Removed multi-column grid logic to keep standard vertical stacking matching other positions */}
         <div className="space-y-4">
           {sortedCandidates.map((c, index) => {
             const votes = displayData.votes[c.id] || 0;
@@ -495,6 +516,235 @@ function PublicDashboard({ config, user }) {
   );
 }
 
+// ============================================================================
+// 1.5 TELEVISION VIEW (KIOSK MODE)
+// ============================================================================
+function TelevisionView({ config, user, setView }) {
+  const [candidates, setCandidates] = useState([]);
+  const [ticker, setTicker] = useState(0);
+  const [stageIdx, setStageIdx] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const cRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates');
+    const unsub = onSnapshot(cRef, (snap) => {
+      const c = [];
+      snap.forEach(doc => c.push({ id: doc.id, ...doc.data() }));
+      setCandidates(arr => c); // Ensure state updates fully
+    }, (err) => console.error("Candidates error: ", err));
+    return () => unsub();
+  }, [user]);
+
+  useEffect(() => {
+    if (!config.isTransmitting) return;
+    const interval = setInterval(() => { setTicker(t => t + 1); }, 100);
+    return () => clearInterval(interval);
+  }, [config.isTransmitting]);
+
+  useEffect(() => {
+    const cycleInterval = setInterval(() => {
+      setStageIdx(prev => (prev + 1) % TV_STAGES.length);
+    }, 5000);
+    return () => clearInterval(cycleInterval);
+  }, []);
+
+  const displayData = useMemo(() => {
+    const votes = {};
+    if (!config.isTransmitting) {
+      candidates.forEach(c => { votes[c.id] = c.voteCount || 0; });
+      return { votes, animatedCount: config.transmittedBallotsCount || 0 };
+    }
+
+    const elapsed = Date.now() - (config.transmissionStartTime || Date.now());
+    const elapsedSeconds = Math.max(0, elapsed / 1000);
+    const initialBallots = config.initialTransmittedBallotsCount || 0;
+    const targetBallots = config.targetTransmittedBallotsCount || 0;
+    const totalBallotsDiff = Math.max(0, targetBallots - initialBallots);
+
+    const duration = totalBallotsDiff > 0 ? totalBallotsDiff : 1;
+    const progress = Math.min(1, elapsedSeconds / duration);
+    const currentBallotsAnimated = initialBallots + Math.floor(progress * totalBallotsDiff);
+
+    candidates.forEach(c => {
+      const initial = c.initialVoteCount || 0;
+      const target = c.targetVoteCount || 0;
+      const diff = Math.max(0, target - initial);
+      const revealed = Math.floor(progress * diff);
+      votes[c.id] = initial + revealed;
+    });
+
+    return { votes, animatedCount: currentBallotsAnimated };
+  }, [candidates, config.isTransmitting, config.transmissionStartTime, config.transmittedBallotsCount, config.initialTransmittedBallotsCount, config.targetTransmittedBallotsCount, config.totalUploadedBallots, ticker]);
+
+  const totalBallots = config.totalUploadedBallots || 0;
+  const transmittedBallots = displayData.animatedCount;
+  const transmissionPercent = totalBallots === 0 ? 0 : Math.round((transmittedBallots / totalBallots) * 100);
+  const isFinished = totalBallots > 0 && transmittedBallots >= totalBallots;
+
+  const currentStage = TV_STAGES[stageIdx];
+
+  const renderTVCard = (council, virtualPosition) => {
+    if (!virtualPosition) return null;
+
+    const positionCandidates = candidates.filter(c => {
+      if (c.council !== council) return false;
+      if (virtualPosition.endsWith("Representative")) {
+        if (council === 'JHS') {
+          const grade = parseInt(virtualPosition.split(" ")[1], 10);
+          return c.position === "Grade Level Representative" && c.gradeLevel === grade;
+        } else {
+          const strand = virtualPosition.split(" ")[0];
+          return c.position === "Strand Representative" && c.strand === strand;
+        }
+      }
+      return c.position === virtualPosition;
+    });
+
+    if (positionCandidates.length === 0) return null;
+
+    const totalPosVotes = positionCandidates.reduce((sum, c) => sum + (displayData.votes[c.id] || 0), 0);
+    const sortedCandidates = [...positionCandidates].sort((a, b) => (displayData.votes[b.id] || 0) - (displayData.votes[a.id] || 0));
+    
+    const isTwoWinnerPosition = virtualPosition === 'Project Manager' || (council === 'SHS' && virtualPosition.endsWith("Representative"));
+    const allowedWinnersCount = isTwoWinnerPosition ? 2 : 1;
+
+    return (
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm w-full animate-in fade-in zoom-in-95 duration-500">
+        <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+          <h4 className="text-xl font-bold text-[#16345f] tracking-tight">{virtualPosition}</h4>
+          {isTwoWinnerPosition && (
+            <span className="text-[10px] bg-[#16345f]/10 text-[#16345f] border border-[#16345f]/20 font-black tracking-wider uppercase px-3 py-1 rounded-full flex items-center gap-1">
+              <Users className="w-3 h-3" /> 2 Seats Available
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          {sortedCandidates.map((c, index) => {
+            const votes = displayData.votes[c.id] || 0;
+            const isWinner1 = votes > 0 && index === 0;
+            const isWinner2 = votes > 0 && index === 1 && allowedWinnersCount === 2;
+            const name = `${c.firstName} ${c.lastName}`.trim();
+            const percentage = totalPosVotes === 0 ? 0 : ((votes / totalPosVotes) * 100).toFixed(1);
+
+            let boxStyle = 'bg-white border-slate-200';
+            let progressColor = 'bg-[#16345f]';
+            let badge = null;
+
+            if (isWinner1) {
+              if (isFinished) {
+                boxStyle = 'border-emerald-500 bg-emerald-50/30 shadow-sm relative overflow-hidden';
+                progressColor = 'bg-emerald-500';
+                badge = <div className="flex items-center gap-1 text-emerald-600 font-extrabold text-[10px] tracking-widest uppercase mb-1"><Award className="w-3 h-3" /> {isTwoWinnerPosition ? '1ST SEAT (WINNER)' : 'WINNER'}</div>;
+              } else {
+                boxStyle = 'border-[#c6b26c] bg-[#c6b26c]/10 shadow-sm relative overflow-hidden';
+                progressColor = 'bg-[#c6b26c]';
+                badge = <div className="flex items-center gap-1 text-[#c6b26c] font-extrabold text-[10px] tracking-widest uppercase mb-1"><TrendingUp className="w-3 h-3 animate-pulse" /> {isTwoWinnerPosition ? '1ST SEAT (LEADING)' : 'LEADING'}</div>;
+              }
+            } else if (isWinner2) {
+              if (isFinished) {
+                boxStyle = 'border-emerald-400 bg-emerald-50/10 shadow-sm relative overflow-hidden';
+                progressColor = 'bg-emerald-400';
+                badge = <div className="flex items-center gap-1 text-emerald-500 font-extrabold text-[10px] tracking-widest uppercase mb-1"><Medal className="w-3 h-3" /> 2ND SEAT (WINNER)</div>;
+              } else {
+                boxStyle = 'border-slate-300 bg-slate-50/50 shadow-sm relative overflow-hidden';
+                progressColor = 'bg-slate-400';
+                badge = <div className="flex items-center gap-1 text-slate-500 font-extrabold text-[10px] tracking-widest uppercase mb-1"><Medal className="w-3 h-3" /> 2ND SEAT</div>;
+              }
+            }
+
+            return (
+              <div key={c.id} className={`p-5 rounded-xl border-2 transition-all duration-300 ${boxStyle}`}>
+                <div className="flex justify-between items-end gap-4 mb-3 relative z-10">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-extrabold text-lg text-[#16345f] leading-snug truncate">{name}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 truncate">{c.partyList || 'INDEPENDENT'}</div>
+                  </div>
+                  <div className="flex flex-col items-end shrink-0 select-none">
+                    {badge ? badge : <div className="h-4 mb-1"></div>}
+                    <div className="text-3xl font-black text-[#16345f] font-mono tracking-tight leading-none">{votes}</div>
+                  </div>
+                </div>
+
+                <div className="mt-1 relative z-10">
+                  <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all duration-500 ${progressColor}`} style={{ width: `${percentage}%` }} />
+                  </div>
+                  <div className="text-[11px] font-extrabold text-slate-400 font-mono text-right tracking-tight mt-1">
+                    {percentage}%
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 bg-white z-[150] flex flex-col overflow-hidden animate-in fade-in">
+      <button onClick={() => setView('home')} className="absolute top-6 right-6 z-50 bg-[#16345f]/10 text-[#16345f] hover:bg-[#16345f]/20 p-3 rounded-full transition-all">
+        <X className="w-8 h-8" />
+      </button>
+
+      <div className="flex-1 p-8 md:p-12 pb-32 w-full max-w-[1600px] mx-auto flex flex-col">
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-start mt-8">
+          {/* JHS COLUMN */}
+          <div className="w-full">
+            <div className="flex flex-col items-center justify-center mb-10">
+              <span className="px-4 py-1.5 rounded-full bg-[#16345f]/10 text-[#16345f] text-[10px] font-black tracking-widest uppercase mb-4 border border-[#16345f]/20 shadow-sm">
+                Official Candidates
+              </span>
+              <h3 className="text-4xl md:text-5xl font-black text-[#16345f] tracking-tighter text-center">Junior High School</h3>
+              <div className="w-24 h-1.5 bg-[#c6b26c] mt-4 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
+            </div>
+            {currentStage.jhs && renderTVCard('JHS', currentStage.jhs)}
+          </div>
+          
+          {/* SHS COLUMN */}
+          <div className="w-full">
+            <div className="flex flex-col items-center justify-center mb-10">
+              <span className="px-4 py-1.5 rounded-full bg-[#16345f]/10 text-[#16345f] text-[10px] font-black tracking-widest uppercase mb-4 border border-[#16345f]/20 shadow-sm">
+                Official Candidates
+              </span>
+              <h3 className="text-4xl md:text-5xl font-black text-[#16345f] tracking-tighter text-center">Senior High School</h3>
+              <div className="w-24 h-1.5 bg-[#c6b26c] mt-4 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
+            </div>
+            {currentStage.shs && renderTVCard('SHS', currentStage.shs)}
+          </div>
+        </div>
+      </div>
+
+      {/* FIXED PROGRESS BAR AT BOTTOM */}
+      <div className="absolute bottom-0 left-0 right-0 bg-[#16345f] text-white p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.2)] flex items-center justify-between z-40">
+         <div className="flex items-center gap-6 flex-1 pr-8">
+           <div className="bg-white/10 rounded-xl p-4 flex items-center gap-4 border border-white/20">
+             <Activity className="w-8 h-8 text-[#c6b26c]" />
+             <div>
+               <div className="text-xs text-slate-300 font-bold tracking-widest uppercase">Transmitted Ballots</div>
+               <div className="text-2xl font-black text-white font-mono">{transmittedBallots.toLocaleString()} / {totalBallots.toLocaleString()}</div>
+             </div>
+           </div>
+           
+           <div className="flex-1">
+             <div className="flex justify-between items-end mb-2">
+                <div className="text-xs font-bold text-slate-300 tracking-widest uppercase">Overall Transmission Progress</div>
+                <div className="text-xl font-black text-[#c6b26c] font-mono">{transmissionPercent}%</div>
+             </div>
+             <div className="h-3 w-full bg-white/10 rounded-full overflow-hidden border border-white/20">
+               <div className="h-full bg-[#c6b26c] transition-all duration-1000 relative" style={{ width: `${transmissionPercent}%` }}>
+                 <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+               </div>
+             </div>
+           </div>
+         </div>
+         <img src="src/assets/logo.png" alt="Logo" className="h-16 w-16 object-contain opacity-90" />
+      </div>
+    </div>
+  );
+}
+
 function MetricCard({ icon, title, value, progress }) {
   return (
     <div className="bg-[#1e293b] rounded-2xl p-6 shadow-xl border border-slate-700/50 flex flex-col justify-center relative overflow-hidden min-h-[110px]">
@@ -570,8 +820,8 @@ function AdminPortal({ config, addToast, user }) {
   if (config.isFirstLogin) return <AdminFirstSetup config={config} addToast={addToast} />;
 
   return (
-    <div className="flex min-h-[calc(100vh-76px)] bg-slate-50 flex-col md:flex-row">
-      <aside className="w-full md:w-64 bg-white border-r border-slate-200 shadow-sm z-10 flex flex-col font-sans shrink-0">
+    <div className="flex min-h-[calc(100vh-76px)] bg-slate-50 flex-col md:flex-row print:bg-white print:min-h-0">
+      <aside className="w-full md:w-64 bg-white border-r border-slate-200 shadow-sm z-10 flex flex-col font-sans shrink-0 print:hidden">
         <div className="p-6">
           <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Management Panel</h3>
           <nav className="space-y-2">
@@ -589,7 +839,7 @@ function AdminPortal({ config, addToast, user }) {
         </div>
       </aside>
 
-      <main className="flex-1 p-4 md:p-10 overflow-y-auto w-full">
+      <main className="flex-1 p-4 md:p-10 overflow-y-auto w-full print:overflow-visible print:p-0">
         <div className="max-w-6xl mx-auto">
           {tab === 'tabulate' && <AdminTabulateTab config={config} addToast={addToast} user={user} />}
           {tab === 'results' && <AdminCertifiedResultsTab user={user} config={config} />}
@@ -667,6 +917,8 @@ function AdminTabulateTab({ config, addToast, user }) {
   const [parsedBallotsCount, setParsedBallotsCount] = useState(0);
   const [parsedCandidates, setParsedCandidates] = useState([]);
 
+  const isLocked = config.isTransmitting;
+
   useEffect(() => {
     if (!user) return;
     const cRef = collection(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates');
@@ -703,6 +955,8 @@ function AdminTabulateTab({ config, addToast, user }) {
   };
 
   const handleProcessData = () => {
+    if (isLocked) return addToast("System is currently locked. Pause transmission first.", "error");
+
     if (!fileText.trim()) {
       addToast("Please upload a file or paste spreadsheet results.", "error");
       return;
@@ -737,7 +991,7 @@ function AdminTabulateTab({ config, addToast, user }) {
       } else if (cleanedHeader.includes('auditor')) {
         matchedPosition = 'Auditor';
       } else if ((cleanedHeader.includes('project') && (cleanedHeader.includes('manager') || cleanedHeader.includes('manaher'))) || cleanedHeader.match(/\bpm\b/)) {
-        matchedPosition = 'Project Manager'; // Multiple columns containing this will combine seamlessly
+        matchedPosition = 'Project Manager'; 
       } else if (cleanedHeader.includes('representative') || cleanedHeader.includes('rep')) {
         if (cleanedHeader.includes(' 7') || cleanedHeader.includes('seven')) specificGrade = 7;
         else if (cleanedHeader.includes(' 8') || cleanedHeader.includes('eight')) specificGrade = 8;
@@ -786,7 +1040,6 @@ function AdminTabulateTab({ config, addToast, user }) {
 
       rowCount++;
       
-      // Track votes per position in this specific row to avoid double counting if a voter selected the same person twice
       const rowVotesForPosition = {};
 
       columnMappings.forEach(mapping => {
@@ -844,7 +1097,6 @@ function AdminTabulateTab({ config, addToast, user }) {
             };
           }
 
-          // Prevent double counting if two columns resolve to the same person for the same position
           if (!rowVotesForPosition[key]) {
             rowVotesForPosition[key] = true;
             votesCounter[key] = (votesCounter[key] || 0) + 1;
@@ -882,6 +1134,7 @@ function AdminTabulateTab({ config, addToast, user }) {
   };
 
   const handleFileUpload = (e) => {
+    if (isLocked) return addToast("System is currently locked. Pause transmission first.", "error");
     const file = e.target.files[0];
     if (!file) return;
 
@@ -895,6 +1148,7 @@ function AdminTabulateTab({ config, addToast, user }) {
   };
 
   const commitToDatabase = async () => {
+    if (isLocked) return addToast("System is currently locked. Pause transmission first.", "error");
     if (parsedCandidates.length === 0) {
       addToast("No parsed candidates to save. Process a spreadsheet first.", "error");
       return;
@@ -952,7 +1206,17 @@ function AdminTabulateTab({ config, addToast, user }) {
   };
 
   return (
-    <div className="space-y-8 font-sans">
+    <div className="space-y-8 font-sans relative">
+      {isLocked && (
+        <div className="absolute inset-0 z-50 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center rounded-2xl border-2 border-slate-200">
+           <div className="bg-white p-8 rounded-2xl shadow-xl flex flex-col items-center max-w-sm">
+             <Lock className="w-16 h-16 text-[#c6b26c] mb-4" />
+             <h3 className="text-2xl font-black text-[#16345f]">Tabulation Locked</h3>
+             <p className="text-slate-600 font-medium mt-3">The system is actively transmitting results to the dashboard. Please pause or complete the current transmission stream to upload new ballots.</p>
+           </div>
+        </div>
+      )}
+
       <div>
         <h2 className="text-3xl font-black text-[#16345f] mb-2">Automated Forms Tabulator</h2>
         <p className="text-slate-500">Adviser platform. Drops standard CSV exports to parse candidates dynamically and verify comparative results.</p>
@@ -971,7 +1235,8 @@ function AdminTabulateTab({ config, addToast, user }) {
                     <button 
                       key={cat.id} 
                       onClick={() => { setSelectedCategory(cat); setFileText(''); setParsedBallotsCount(0); setParsedCandidates([]); }}
-                      className={`py-2 px-4 text-xs font-black rounded-lg transition-all border ${isSelected ? 'bg-[#16345f] text-[#c6b26c] border-[#16345f] shadow' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'}`}
+                      disabled={isLocked}
+                      className={`py-2 px-4 text-xs font-black rounded-lg transition-all border ${isSelected ? 'bg-[#16345f] text-[#c6b26c] border-[#16345f] shadow' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'} ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       {cat.label}
                     </button>
@@ -988,7 +1253,8 @@ function AdminTabulateTab({ config, addToast, user }) {
                     <button 
                       key={cat.id} 
                       onClick={() => { setSelectedCategory(cat); setFileText(''); setParsedBallotsCount(0); setParsedCandidates([]); }}
-                      className={`py-2 px-4 text-xs font-black rounded-lg transition-all border ${isSelected ? 'bg-[#16345f] text-[#c6b26c] border-[#16345f] shadow' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'}`}
+                      disabled={isLocked}
+                      className={`py-2 px-4 text-xs font-black rounded-lg transition-all border ${isSelected ? 'bg-[#16345f] text-[#c6b26c] border-[#16345f] shadow' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'} ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       {cat.label}
                     </button>
@@ -1010,13 +1276,13 @@ function AdminTabulateTab({ config, addToast, user }) {
 
           <div className="space-y-4">
             <div className="flex items-center justify-center w-full">
-              <label htmlFor="csv-upload" className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:bg-slate-50 transition">
+              <label htmlFor="csv-upload" className={`flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-xl transition ${isLocked ? 'bg-slate-100 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-50'}`}>
                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <Upload className="w-8 h-8 text-slate-400 mb-2" />
-                  <p className="text-sm font-bold text-slate-600">Choose Google Forms .csv</p>
+                  <Upload className={`w-8 h-8 mb-2 ${isLocked ? 'text-slate-300' : 'text-slate-400'}`} />
+                  <p className={`text-sm font-bold ${isLocked ? 'text-slate-400' : 'text-slate-600'}`}>Choose Google Forms .csv</p>
                   <p className="text-xs text-slate-400 mt-1">UTF-8 comma-separated files</p>
                 </div>
-                <input id="csv-upload" type="file" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/plain" className="hidden" onChange={handleFileUpload} />
+                <input id="csv-upload" type="file" disabled={isLocked} accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/plain" className="hidden" onChange={handleFileUpload} />
               </label>
             </div>
 
@@ -1033,14 +1299,16 @@ function AdminTabulateTab({ config, addToast, user }) {
               <textarea 
                 value={fileText}
                 onChange={e => setFileText(e.target.value)}
+                disabled={isLocked}
                 placeholder="Paste columns copied directly from your Google Form responses sheet here..."
-                className="w-full h-40 p-3 border-2 border-slate-200 focus:border-[#16345f] rounded-xl outline-none font-mono text-xs text-slate-700 bg-slate-50"
+                className={`w-full h-40 p-3 border-2 border-slate-200 focus:border-[#16345f] rounded-xl outline-none font-mono text-xs text-slate-700 bg-slate-50 ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
               />
             </div>
 
             <button 
               onClick={handleProcessData}
-              className="w-full bg-[#16345f] hover:bg-[#0b1a30] text-white font-extrabold py-3 rounded-xl transition uppercase tracking-widest text-xs"
+              disabled={isLocked}
+              className={`w-full text-white font-extrabold py-3 rounded-xl transition uppercase tracking-widest text-xs ${isLocked ? 'bg-slate-300 cursor-not-allowed' : 'bg-[#16345f] hover:bg-[#0b1a30]'}`}
             >
               Process and Tabulate
             </button>
@@ -1061,7 +1329,7 @@ function AdminTabulateTab({ config, addToast, user }) {
                 <span className="text-xs font-bold text-slate-400 uppercase block tracking-wider">Responses/Ballots Counted</span>
                 <span className="text-3xl font-black text-[#16345f] font-mono">{parsedBallotsCount}</span>
               </div>
-              {parsedCandidates.length > 0 && (
+              {parsedCandidates.length > 0 && !isLocked && (
                 <div className="bg-amber-100 text-[#16345f] px-3 py-1.5 rounded-lg border border-[#c6b26c]/30 text-xs font-bold uppercase tracking-wider flex items-center gap-1 animate-pulse">
                   Ready to Commit
                 </div>
@@ -1102,9 +1370,9 @@ function AdminTabulateTab({ config, addToast, user }) {
 
             <button 
               onClick={commitToDatabase}
-              disabled={parsedCandidates.length === 0}
+              disabled={parsedCandidates.length === 0 || isLocked}
               className={`w-full py-4 rounded-xl font-black transition-all uppercase tracking-widest text-sm flex items-center justify-center gap-2 ${
-                parsedCandidates.length > 0 
+                parsedCandidates.length > 0 && !isLocked
                   ? 'bg-[#16345f] text-white hover:bg-[#0b1a30] shadow-xl' 
                   : 'bg-slate-100 text-slate-400 cursor-not-allowed'
               }`}
@@ -1139,8 +1407,8 @@ function AdminCertifiedResultsTab({ user, config }) {
     const positions = getCouncilPositions(council);
     
     return (
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden space-y-6 p-6">
-        <h3 className="text-xl font-extrabold text-[#16345f] border-b pb-3 border-slate-100 flex justify-between items-center">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden space-y-6 p-6 print:border-none print:shadow-none print:p-0 print:mb-8">
+        <h3 className="text-xl font-extrabold text-[#16345f] border-b pb-3 border-slate-100 flex justify-between items-center print:text-black print:border-black">
           <span>{council === 'JHS' ? 'Junior High School' : 'Senior High School'} Official Ledger</span>
         </h3>
 
@@ -1170,23 +1438,23 @@ function AdminCertifiedResultsTab({ user, config }) {
           const isTwoWinnerPosition = pos === 'Project Manager' || (council === 'SHS' && pos.endsWith("Representative"));
 
           return (
-            <div key={pos} className="space-y-2 border-b border-slate-50 last:border-0 pb-4 last:pb-0">
-              <span className="text-xs font-black text-slate-400 tracking-wider uppercase block">{pos}</span>
+            <div key={pos} className="space-y-2 border-b border-slate-50 last:border-0 pb-4 last:pb-0 print:border-slate-300">
+              <span className="text-xs font-black text-slate-400 tracking-wider uppercase block print:text-black">{pos}</span>
               <div className="space-y-1.5">
                 {sortedCands.map((c, idx) => {
                   const absoluteTotal = (c.voteCount || 0) + (c.pendingVotes || 0);
                   return (
-                    <div key={c.id} className="flex justify-between items-center text-sm p-2 rounded hover:bg-slate-50">
+                    <div key={c.id} className="flex justify-between items-center text-sm p-2 rounded hover:bg-slate-50 print:p-1 print:border-b print:border-dashed print:border-slate-200">
                       <div>
-                        <div className="font-bold text-[#16345f]">{c.lastName}, {c.firstName}</div>
-                        <div className="text-[10px] text-slate-400 font-bold tracking-widest mt-0.5 uppercase">{c.partyList || 'INDEPENDENT'}</div>
+                        <div className="font-bold text-[#16345f] print:text-black">{c.lastName}, {c.firstName}</div>
+                        <div className="text-[10px] text-slate-400 font-bold tracking-widest mt-0.5 uppercase print:text-gray-600">{c.partyList || 'INDEPENDENT'}</div>
                       </div>
                       <div className="flex items-center gap-3">
-                        {idx === 0 && <span className="text-[10px] bg-amber-50 text-amber-700 font-bold border border-amber-200 px-1.5 py-0.5 rounded flex items-center gap-1"><Award className="w-3 h-3"/> 1ST SEAT</span>}
+                        {idx === 0 && <span className="text-[10px] bg-amber-50 text-amber-700 font-bold border border-amber-200 px-1.5 py-0.5 rounded flex items-center gap-1 print:border-none print:bg-transparent print:text-black"><Award className="w-3 h-3 print:hidden"/> 1ST SEAT</span>}
                         {idx === 1 && isTwoWinnerPosition && (
-                          <span className="text-[10px] bg-slate-100 text-slate-600 font-bold border border-slate-300 px-1.5 py-0.5 rounded flex items-center gap-1"><Medal className="w-3 h-3"/> 2ND SEAT</span>
+                          <span className="text-[10px] bg-slate-100 text-slate-600 font-bold border border-slate-300 px-1.5 py-0.5 rounded flex items-center gap-1 print:border-none print:bg-transparent print:text-black"><Medal className="w-3 h-3 print:hidden"/> 2ND SEAT</span>
                         )}
-                        <span className="font-mono font-black text-sm bg-slate-100 border px-3 py-1 rounded min-w-[3rem] text-center text-slate-700">
+                        <span className="font-mono font-black text-sm bg-slate-100 border px-3 py-1 rounded min-w-[3rem] text-center text-slate-700 print:border-none print:bg-transparent print:text-black">
                           {absoluteTotal}
                         </span>
                       </div>
@@ -1202,13 +1470,21 @@ function AdminCertifiedResultsTab({ user, config }) {
   };
 
   return (
-    <div className="space-y-8 font-sans">
-      <div>
-        <h2 className="text-3xl font-black text-[#16345f] mb-2">Official Certified Results Ledger</h2>
-        <p className="text-slate-500">Displays absolute real-time database records immediately upon saving, unaffected by public transmission delays.</p>
+    <div className="space-y-8 font-sans print:space-y-4">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 print:mb-8">
+        <div>
+          <h2 className="text-3xl font-black text-[#16345f] mb-2 print:text-black">Official Certified Results Ledger</h2>
+          <p className="text-slate-500 print:text-black">Displays absolute real-time database records immediately upon saving, unaffected by public transmission delays.</p>
+        </div>
+        <button 
+          onClick={() => window.print()}
+          className="print:hidden bg-[#16345f] hover:bg-[#0b1a30] text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-sm transition whitespace-nowrap"
+        >
+          <Printer className="w-5 h-5" /> Print Summary
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 print:block print:space-y-8">
         {renderOfficialCertifiedPositions('JHS')}
         {renderOfficialCertifiedPositions('SHS')}
       </div>
@@ -1273,7 +1549,7 @@ function AdminCandidatesTab({ addToast, user }) {
     const pieStyle = { background: gradientStops.length > 0 ? `conic-gradient(${gradientStops.join(', ')})` : '#e2e8f0' };
 
     return (
-      <div className="fixed inset-0 bg-[#0f172a]/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="fixed inset-0 bg-[#0f172a]/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200 print:hidden">
         <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-200">
           <div className="bg-[#16345f] p-6 relative">
              <button onClick={() => setViewCandidate(null)} className="absolute top-6 right-6 text-white/70 hover:text-white transition"><X className="w-6 h-6"/></button>
@@ -1418,13 +1694,14 @@ function AdminCandidatesTab({ addToast, user }) {
 }
 
 // ============================================================================
-// 6. TRANSMISSION CONTROLS
+// 6. TRANSMISSION CONTROLS (WITH LIVE TICKER & SMART LOCKING)
 // ============================================================================
 function AdminTransmitTab({ config, addToast, user }) {
   const [candidates, setCandidates] = useState([]);
   const [confirmTransmit, setConfirmTransmit] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [resetCode, setResetCode] = useState('');
+  const [ticker, setTicker] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -1437,24 +1714,48 @@ function AdminTransmitTab({ config, addToast, user }) {
     return () => unsub();
   }, [user]);
 
+  // Use identical ticker logic to perfectly sync admin UI with public UI
+  useEffect(() => {
+    if (!config.isTransmitting) return;
+    const interval = setInterval(() => { setTicker(t => t + 1); }, 100);
+    return () => clearInterval(interval);
+  }, [config.isTransmitting]);
+
+  const displayData = useMemo(() => {
+    if (!config.isTransmitting) {
+      return { animatedCount: config.transmittedBallotsCount || 0 };
+    }
+
+    const elapsed = Date.now() - (config.transmissionStartTime || Date.now());
+    const elapsedSeconds = Math.max(0, elapsed / 1000);
+    const initialBallots = config.initialTransmittedBallotsCount || 0;
+    const targetBallots = config.targetTransmittedBallotsCount || 0;
+    const totalBallotsDiff = Math.max(0, targetBallots - initialBallots);
+
+    const duration = totalBallotsDiff > 0 ? totalBallotsDiff : 1;
+    const progress = Math.min(1, elapsedSeconds / duration);
+    const currentBallotsAnimated = initialBallots + Math.floor(progress * totalBallotsDiff);
+
+    return { animatedCount: currentBallotsAnimated };
+  }, [config.isTransmitting, config.transmissionStartTime, config.transmittedBallotsCount, config.initialTransmittedBallotsCount, config.targetTransmittedBallotsCount, ticker]);
+
   const totalUploadedBallots = config.totalUploadedBallots || 0;
-  const transmittedCount = config.transmittedBallotsCount || 0;
-  const totalPendingBallots = Math.max(0, totalUploadedBallots - transmittedCount);
+  const transmittedNow = displayData.animatedCount;
+  
+  // Real-time calculation of pending ballots
+  const livePendingBallots = Math.max(0, totalUploadedBallots - transmittedNow);
 
   // Active state calculations
-  const elapsed = Date.now() - (config.transmissionStartTime || Date.now());
-  const elapsedSeconds = Math.max(0, elapsed / 1000);
   const targetTransmission = config.targetTransmittedBallotsCount || 0;
   const initialTransmission = config.initialTransmittedBallotsCount || 0;
-  
+  const elapsed = Date.now() - (config.transmissionStartTime || Date.now());
   const maxDiff = Math.max(0, targetTransmission - initialTransmission);
-  const progress = maxDiff === 0 ? 1 : Math.min(1, elapsedSeconds / maxDiff);
-  const transmittedNow = Math.floor(progress * maxDiff);
+  const progress = maxDiff === 0 ? 1 : Math.min(1, Math.max(0, elapsed / 1000) / maxDiff);
 
   const isFinished = config.isTransmitting && progress >= 1;
 
   const handleTransmit = async () => {
-    if(totalPendingBallots === 0) return addToast("No pending ballots to transmit.", "error");
+    if(livePendingBallots === 0) return addToast("No pending ballots to transmit.", "error");
 
     const batch = writeBatch(db);
     const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
@@ -1462,19 +1763,18 @@ function AdminTransmitTab({ config, addToast, user }) {
     batch.update(configRef, {
       isTransmitting: true,
       transmissionStartTime: Date.now(),
-      initialTransmittedBallotsCount: transmittedCount,
+      initialTransmittedBallotsCount: transmittedNow, // Start from wherever we paused/currently are
       targetTransmittedBallotsCount: totalUploadedBallots,
       transmittedBallotsCount: totalUploadedBallots
     });
 
     candidates.forEach(c => {
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_candidates', c.id);
-      const current = c.voteCount || 0;
-      const pending = c.pendingVotes || 0;
+      const absoluteCurrentVotes = (c.voteCount || 0) + (c.pendingVotes || 0);
       batch.update(ref, {
-        initialVoteCount: current,
-        targetVoteCount: current + pending,
-        voteCount: current + pending, 
+        initialVoteCount: c.voteCount || 0, // start interpolating from currently saved vote
+        targetVoteCount: absoluteCurrentVotes,
+        voteCount: absoluteCurrentVotes, 
         pendingVotes: 0 
       });
     });
@@ -1488,12 +1788,10 @@ function AdminTransmitTab({ config, addToast, user }) {
     const batch = writeBatch(db);
     const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'ccssc_settings', 'system_config');
     
-    const newTransmittedCount = Math.min(targetTransmission, initialTransmission + transmittedNow);
-    
     batch.update(configRef, {
       isTransmitting: false,
-      transmittedBallotsCount: newTransmittedCount,
-      targetTransmittedBallotsCount: newTransmittedCount
+      transmittedBallotsCount: transmittedNow,
+      targetTransmittedBallotsCount: transmittedNow
     });
     
     candidates.forEach(c => {
@@ -1512,7 +1810,7 @@ function AdminTransmitTab({ config, addToast, user }) {
     });
     
     await batch.commit();
-    addToast("Transmission feed paused. Progress saved securely.", "success");
+    addToast("Transmission feed paused. Progress saved securely. Uploads unlocked.", "success");
   };
 
   const togglePublicResults = async () => {
@@ -1563,42 +1861,52 @@ function AdminTransmitTab({ config, addToast, user }) {
   return (
     <div className="space-y-8 font-sans">
       <div>
-        <h2 className="text-3xl font-black text-[#16345f] mb-2">Transmission Streams</h2>
+        <h2 className="text-3xl font-black text-[#16345f] mb-2">Transmission</h2>
         <p className="text-slate-500">Initialize and feed certified voter data packets directly onto the homepage tally dashboard.</p>
       </div>
 
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 text-center">
         <Activity className="w-16 h-16 text-[#c6b26c] mx-auto mb-4" />
-        <div className="text-6xl font-black text-[#16345f] mb-2 font-mono">{totalPendingBallots.toLocaleString()}</div>
+        <div className="text-6xl font-black text-[#16345f] mb-2 font-mono">{livePendingBallots.toLocaleString()}</div>
         <div className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-8 font-sans">Ballots Pending Transmission</div>
 
         {isFinished ? (
-           <div className="w-full max-w-sm mx-auto block py-4 rounded-xl font-bold uppercase tracking-widest bg-emerald-100 text-emerald-700 border border-emerald-300 flex justify-center items-center gap-2 text-xs">
-             <CheckCircle className="w-5 h-5"/> All Channels Transmitted
+           <div className="space-y-3">
+             <div className="w-full max-w-sm mx-auto block py-4 rounded-xl font-bold uppercase tracking-widest bg-emerald-100 text-emerald-700 border border-emerald-300 flex justify-center items-center gap-2 text-xs">
+               <CheckCircle className="w-5 h-5"/> All Channels Transmitted
+             </div>
+             {livePendingBallots > 0 && (
+                <button 
+                  onClick={() => setConfirmTransmit(true)}
+                  className="w-full max-w-sm mx-auto block py-4 rounded-xl font-bold uppercase tracking-widest transition-all text-xs bg-[#16345f] text-white hover:bg-[#0b1a30] shadow-xl hover:-translate-y-0.5"
+                >
+                  Transmit New Uploads ({livePendingBallots})
+                </button>
+             )}
            </div>
         ) : config.isTransmitting ? (
            <button 
              onClick={handleStopTransmission}
-             className="w-full max-w-sm mx-auto py-4 rounded-xl font-bold uppercase tracking-widest transition-all bg-red-600 hover:bg-red-700 text-white shadow-xl flex justify-center items-center gap-2 text-xs"
+             className="w-full max-w-sm mx-auto py-4 rounded-xl font-bold uppercase tracking-widest transition-all bg-red-600 hover:bg-red-700 text-white shadow-xl flex justify-center items-center gap-2 text-xs hover:-translate-y-0.5"
            >
              <StopCircle className="w-5 h-5"/> Pause Stream Transmission
            </button>
         ) : !confirmTransmit ? (
           <button 
             onClick={() => setConfirmTransmit(true)}
-            disabled={totalPendingBallots === 0}
+            disabled={livePendingBallots === 0}
             className={`w-full max-w-sm mx-auto block py-4 rounded-xl font-bold uppercase tracking-widest transition-all text-xs ${
-              totalPendingBallots > 0 
+              livePendingBallots > 0 
                 ? 'bg-[#16345f] text-white hover:bg-[#0b1a30] shadow-xl hover:-translate-y-0.5' 
                 : 'bg-slate-100 text-slate-400 cursor-not-allowed'
             }`}
           >
-            Start Transmission Sync
+            {livePendingBallots > 0 ? `Transmit ${livePendingBallots} Ballots` : 'Start Transmission Sync'}
           </button>
         ) : (
           <div className="flex gap-4 justify-center max-w-sm mx-auto">
-            <button onClick={handleTransmit} className="flex-1 bg-emerald-600 text-white font-bold py-4 rounded-xl uppercase tracking-widest shadow-lg hover:bg-emerald-700 text-xs">Confirm</button>
-            <button onClick={() => setConfirmTransmit(false)} className="flex-1 bg-slate-200 text-slate-700 font-bold py-4 rounded-xl uppercase tracking-widest hover:bg-slate-300 text-xs">Cancel</button>
+            <button onClick={handleTransmit} className="flex-1 bg-emerald-600 text-white font-bold py-4 rounded-xl uppercase tracking-widest shadow-lg hover:bg-emerald-700 text-xs hover:-translate-y-0.5">Confirm</button>
+            <button onClick={() => setConfirmTransmit(false)} className="flex-1 bg-slate-200 text-slate-700 font-bold py-4 rounded-xl uppercase tracking-widest hover:bg-slate-300 text-xs hover:-translate-y-0.5">Cancel</button>
           </div>
         )}
       </div>
@@ -1679,4 +1987,5 @@ function AdminSetupTab({ config, addToast }) {
     </div>
   );
 }
+
 
