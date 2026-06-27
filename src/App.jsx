@@ -609,9 +609,6 @@ function TelevisionView({ config, user, setView }) {
     const isMultiWinnerPosition = virtualPosition === 'Project Manager' || (council === 'SHS' && virtualPosition.endsWith("Representative"));
     // Enforce 2 winners only
     const allowedWinnersCount = isMultiWinnerPosition ? 2 : 1;
-    
-    // Slice to 3 for PMs and Strands to show top 3 candidates (but only 2 will be marked as winners)
-    const topCandidates = sortedCandidates.slice(0, isMultiWinnerPosition ? 3 : 2);
 
     return (
       <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm w-full animate-in fade-in zoom-in-95 duration-500">
@@ -625,7 +622,7 @@ function TelevisionView({ config, user, setView }) {
         </div>
 
         <div className="space-y-2">
-          {topCandidates.map((c, index) => {
+          {sortedCandidates.map((c, index) => {
             const votes = displayData.votes[c.id] || 0;
             const isWinner1 = votes > 0 && index === 0;
             const isWinner2 = votes > 0 && index === 1 && allowedWinnersCount >= 2;
@@ -690,7 +687,7 @@ function TelevisionView({ config, user, setView }) {
 
   return (
     <div className="fixed inset-0 bg-white z-[150] flex flex-col overflow-hidden animate-in fade-in">
-      <div className="flex-1 p-4 md:p-6 pb-20 w-full max-w-[1600px] mx-auto flex flex-col">
+      <div className="flex-1 p-4 md:p-6 pb-20 w-full max-w-[1600px] mx-auto flex flex-col overflow-y-auto">
         <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-start mt-2">
           {/* JHS COLUMN */}
           <div className="w-full">
@@ -1996,5 +1993,5 @@ function AdminSetupTab({ config, addToast }) {
         </div>
       </div>
     </div>
-  );                    
+  );
 }
