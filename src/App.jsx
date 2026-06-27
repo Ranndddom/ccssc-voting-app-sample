@@ -605,22 +605,25 @@ function TelevisionView({ config, user, setView }) {
     const totalPosVotes = positionCandidates.reduce((sum, c) => sum + (displayData.votes[c.id] || 0), 0);
     const sortedCandidates = [...positionCandidates].sort((a, b) => (displayData.votes[b.id] || 0) - (displayData.votes[a.id] || 0));
     
+    // Only show the top 2 candidates
+    const topCandidates = sortedCandidates.slice(0, 2);
+
     const isTwoWinnerPosition = virtualPosition === 'Project Manager' || (council === 'SHS' && virtualPosition.endsWith("Representative"));
     const allowedWinnersCount = isTwoWinnerPosition ? 2 : 1;
 
     return (
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm w-full animate-in fade-in zoom-in-95 duration-500">
-        <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
-          <h4 className="text-xl font-bold text-[#16345f] tracking-tight">{virtualPosition}</h4>
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm w-full animate-in fade-in zoom-in-95 duration-500">
+        <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
+          <h4 className="text-lg font-bold text-[#16345f] tracking-tight">{virtualPosition}</h4>
           {isTwoWinnerPosition && (
-            <span className="text-[10px] bg-[#16345f]/10 text-[#16345f] border border-[#16345f]/20 font-black tracking-wider uppercase px-3 py-1 rounded-full flex items-center gap-1">
+            <span className="text-[9px] bg-[#16345f]/10 text-[#16345f] border border-[#16345f]/20 font-black tracking-wider uppercase px-2 py-0.5 rounded-full flex items-center gap-1">
               <Users className="w-3 h-3" /> 2 Seats Available
             </span>
           )}
         </div>
 
-        <div className="space-y-4">
-          {sortedCandidates.map((c, index) => {
+        <div className="space-y-2">
+          {topCandidates.map((c, index) => {
             const votes = displayData.votes[c.id] || 0;
             const isWinner1 = votes > 0 && index === 0;
             const isWinner2 = votes > 0 && index === 1 && allowedWinnersCount === 2;
@@ -654,23 +657,23 @@ function TelevisionView({ config, user, setView }) {
             }
 
             return (
-              <div key={c.id} className={`p-5 rounded-xl border-2 transition-all duration-300 ${boxStyle}`}>
-                <div className="flex justify-between items-end gap-4 mb-3 relative z-10">
+              <div key={c.id} className={`p-3 rounded-lg border-2 transition-all duration-300 ${boxStyle}`}>
+                <div className="flex justify-between items-end gap-4 mb-1 relative z-10">
                   <div className="flex-1 min-w-0">
-                    <div className="font-extrabold text-lg text-[#16345f] leading-snug truncate">{name}</div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 truncate">{c.partyList || 'INDEPENDENT'}</div>
+                    <div className="font-extrabold text-base text-[#16345f] leading-snug truncate">{name}</div>
+                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 truncate">{c.partyList || 'INDEPENDENT'}</div>
                   </div>
                   <div className="flex flex-col items-end shrink-0 select-none">
                     {badge ? badge : <div className="h-4 mb-1"></div>}
-                    <div className="text-3xl font-black text-[#16345f] font-mono tracking-tight leading-none">{votes}</div>
+                    <div className="text-2xl font-black text-[#16345f] font-mono tracking-tight leading-none">{votes}</div>
                   </div>
                 </div>
 
                 <div className="mt-1 relative z-10">
-                  <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
+                  <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
                     <div className={`h-full rounded-full transition-all duration-500 ${progressColor}`} style={{ width: `${percentage}%` }} />
                   </div>
-                  <div className="text-[11px] font-extrabold text-slate-400 font-mono text-right tracking-tight mt-1">
+                  <div className="text-[10px] font-extrabold text-slate-400 font-mono text-right tracking-tight mt-1">
                     {percentage}%
                   </div>
                 </div>
@@ -684,32 +687,22 @@ function TelevisionView({ config, user, setView }) {
 
   return (
     <div className="fixed inset-0 bg-white z-[150] flex flex-col overflow-hidden animate-in fade-in">
-      <button onClick={() => setView('home')} className="absolute top-6 right-6 z-50 bg-[#16345f]/10 text-[#16345f] hover:bg-[#16345f]/20 p-3 rounded-full transition-all">
-        <X className="w-8 h-8" />
-      </button>
-
-      <div className="flex-1 p-8 md:p-12 pb-32 w-full max-w-[1600px] mx-auto flex flex-col">
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-start mt-8">
+      <div className="flex-1 p-4 md:p-6 pb-20 w-full max-w-[1600px] mx-auto flex flex-col">
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-start mt-2">
           {/* JHS COLUMN */}
           <div className="w-full">
-            <div className="flex flex-col items-center justify-center mb-10">
-              <span className="px-4 py-1.5 rounded-full bg-[#16345f]/10 text-[#16345f] text-[10px] font-black tracking-widest uppercase mb-4 border border-[#16345f]/20 shadow-sm">
-                Official Candidates
-              </span>
-              <h3 className="text-4xl md:text-5xl font-black text-[#16345f] tracking-tighter text-center">Junior High School</h3>
-              <div className="w-24 h-1.5 bg-[#c6b26c] mt-4 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
+            <div className="flex flex-col items-center justify-center mb-4">
+              <h3 className="text-3xl md:text-4xl font-black text-[#16345f] tracking-tighter text-center">Junior High School</h3>
+              <div className="w-24 h-1.5 bg-[#c6b26c] mt-2 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
             </div>
             {currentStage.jhs && renderTVCard('JHS', currentStage.jhs)}
           </div>
           
           {/* SHS COLUMN */}
           <div className="w-full">
-            <div className="flex flex-col items-center justify-center mb-10">
-              <span className="px-4 py-1.5 rounded-full bg-[#16345f]/10 text-[#16345f] text-[10px] font-black tracking-widest uppercase mb-4 border border-[#16345f]/20 shadow-sm">
-                Official Candidates
-              </span>
-              <h3 className="text-4xl md:text-5xl font-black text-[#16345f] tracking-tighter text-center">Senior High School</h3>
-              <div className="w-24 h-1.5 bg-[#c6b26c] mt-4 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
+            <div className="flex flex-col items-center justify-center mb-4">
+              <h3 className="text-3xl md:text-4xl font-black text-[#16345f] tracking-tighter text-center">Senior High School</h3>
+              <div className="w-24 h-1.5 bg-[#c6b26c] mt-2 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
             </div>
             {currentStage.shs && renderTVCard('SHS', currentStage.shs)}
           </div>
@@ -718,7 +711,7 @@ function TelevisionView({ config, user, setView }) {
 
       {/* FIXED PROGRESS BAR AT BOTTOM */}
       <div className="absolute bottom-0 left-0 right-0 bg-[#16345f] text-white p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.2)] flex items-center justify-between z-40">
-         <div className="flex items-center gap-6 flex-1 pr-8">
+         <div className="flex items-center gap-6 w-full">
            <div className="bg-white/10 rounded-xl p-4 flex items-center gap-4 border border-white/20">
              <Activity className="w-8 h-8 text-[#c6b26c]" />
              <div>
@@ -739,7 +732,6 @@ function TelevisionView({ config, user, setView }) {
              </div>
            </div>
          </div>
-         <img src="src/assets/logo.png" alt="Logo" className="h-16 w-16 object-contain opacity-90" />
       </div>
     </div>
   );
@@ -916,8 +908,24 @@ function AdminTabulateTab({ config, addToast, user }) {
   
   const [parsedBallotsCount, setParsedBallotsCount] = useState(0);
   const [parsedCandidates, setParsedCandidates] = useState([]);
+  const [ticker, setTicker] = useState(0);
 
-  const isLocked = config.isTransmitting;
+  // Added ticker for real-time unlock check
+  useEffect(() => {
+    if (!config.isTransmitting) return;
+    const interval = setInterval(() => { setTicker(t => t + 1); }, 1000);
+    return () => clearInterval(interval);
+  }, [config.isTransmitting]);
+
+  const targetTransmission = config.targetTransmittedBallotsCount || 0;
+  const initialTransmission = config.initialTransmittedBallotsCount || 0;
+  const elapsed = Date.now() - (config.transmissionStartTime || Date.now());
+  const maxDiff = Math.max(0, targetTransmission - initialTransmission);
+  const progress = maxDiff === 0 ? 1 : Math.min(1, Math.max(0, elapsed / 1000) / maxDiff);
+  const isFinished = config.isTransmitting && progress >= 1;
+
+  // Unlocks Tabulator automatically if the transmission stream finishes reaching its target.
+  const isLocked = config.isTransmitting && !isFinished;
 
   useEffect(() => {
     if (!user) return;
@@ -1987,5 +1995,4 @@ function AdminSetupTab({ config, addToast }) {
     </div>
   );
 }
-
 
