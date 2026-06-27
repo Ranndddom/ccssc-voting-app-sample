@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  ShieldAlert, Users, CheckCircle, 
+  ShieldAlert, Users, CheckCircle, ShieldCheck,
   Settings, LogOut, Lock, Activity, AlertCircle, X, TrendingUp,
-  BarChart3, EyeOff, Eye, StopCircle, Upload, Clipboard, Check, Trash2, PieChart
+  BarChart3, EyeOff, Eye, StopCircle, Upload, Clipboard, Trash2, PieChart, Award, Medal
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -201,7 +201,7 @@ function App() {
     <div className="min-h-screen font-sans bg-white text-slate-900 flex flex-col">
       <ToastContainer toasts={toasts} />
 
-      <header className={`${isHome ? 'bg-[#0f172a] border-none text-white' : 'bg-[#16345f] text-white'} p-4 md:px-8 flex items-center justify-between relative z-50 transition-colors`}>
+      <header className={`${isHome ? 'bg-[#0f172a] border-none text-white' : 'bg-[#16345f] text-white'} p-4 md:px-8 flex items-center justify-between relative z-50 transition-colors shadow-sm`}>
         <div 
           className="flex items-center gap-3 cursor-pointer select-none"
           onClick={() => {
@@ -210,16 +210,8 @@ function App() {
           }}
           title="Security Protected Zone"
         >
-          <div className={`w-10 h-10 border border-[#c6b26c] rounded-lg flex items-center justify-center overflow-hidden ${isHome ? 'bg-transparent' : 'bg-white p-1'}`}>
-            <img 
-              src="https://i.postimg.cc/sXmyRV7V/Logo.png" 
-              alt="Logo" 
-              className="w-full h-full object-contain"
-              onError={(e) => {
-                e.target.onerror = null; 
-                e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c6b26c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 11.08V12a10 10 0 1 1-5.93-9.14'/%3E%3Cpolyline points='22 4 12 14.01 9 11.01'/%3E%3C/svg%3E";
-              }}
-            />
+          <div className={`w-10 h-10 border-2 border-[#c6b26c] rounded-xl flex items-center justify-center overflow-hidden shadow-sm ${isHome ? 'bg-[#1e293b]' : 'bg-white'}`}>
+            <ShieldCheck className={`w-6 h-6 ${isHome ? 'text-[#c6b26c]' : 'text-[#16345f]'}`} />
           </div>
           <div>
             <h1 className="font-bold tracking-wider leading-tight text-white text-base md:text-lg">
@@ -294,14 +286,12 @@ function PublicDashboard({ config, user }) {
     return () => unsub();
   }, [user]);
 
-  // Faster ticker for smooth proportional animation updates
   useEffect(() => {
     if (!config.isTransmitting) return;
     const interval = setInterval(() => { setTicker(t => t + 1); }, 100);
     return () => clearInterval(interval);
   }, [config.isTransmitting]);
 
-  // Core Real-time Vote Interpolator Engine - By Voter Staggered Simulation
   const displayData = useMemo(() => {
     const votes = {};
     if (!config.isTransmitting) {
@@ -316,9 +306,7 @@ function PublicDashboard({ config, user }) {
     const targetBallots = config.targetTransmittedBallotsCount || 0;
     const totalBallotsDiff = Math.max(0, targetBallots - initialBallots);
 
-    // Using totalBallotsDiff directly as duration ensures roughly 1 ballot per second overall
     const duration = totalBallotsDiff > 0 ? totalBallotsDiff : 1;
-    // Cap progress at exactly 1 to prevent overshoot when finished
     const progress = Math.min(1, elapsedSeconds / duration);
 
     const currentBallotsAnimated = initialBallots + Math.floor(progress * totalBallotsDiff);
@@ -327,8 +315,6 @@ function PublicDashboard({ config, user }) {
       const initial = c.initialVoteCount || 0;
       const target = c.targetVoteCount || 0;
       const diff = Math.max(0, target - initial);
-      
-      // Proportional reveal means candidates with more votes tick up faster, simulating individual randomized votes
       const revealed = Math.floor(progress * diff);
       votes[c.id] = initial + revealed;
     });
@@ -360,59 +346,66 @@ function PublicDashboard({ config, user }) {
     const totalPosVotes = positionCandidates.reduce((sum, c) => sum + (displayData.votes[c.id] || 0), 0);
     const sortedCandidates = [...positionCandidates].sort((a, b) => (displayData.votes[b.id] || 0) - (displayData.votes[a.id] || 0));
     
-    const isStrandRep = council === 'SHS' && virtualPosition.endsWith("Representative");
-    const allowedWinnersCount = isStrandRep ? 2 : 1;
+    const isTwoWinnerPosition = virtualPosition === 'Project Manager' || (council === 'SHS' && virtualPosition.endsWith("Representative"));
+    const allowedWinnersCount = isTwoWinnerPosition ? 2 : 1;
 
     return (
-      <div key={`${council}-${virtualPosition}`} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all duration-300">
+      <div key={`${council}-${virtualPosition}`} className={`bg-white rounded-3xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all duration-300 ${isTwoWinnerPosition ? 'md:col-span-2 max-w-4xl mx-auto w-full' : ''}`}>
         <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
           <h4 className="text-xl font-bold text-[#16345f] tracking-tight">{virtualPosition}</h4>
-          {isStrandRep && (
-            <span className="text-xs bg-amber-100 text-[#16345f] border border-[#c6b26c] font-black tracking-wider uppercase px-2 py-1 rounded">2 Winners Elected</span>
+          {isTwoWinnerPosition && (
+            <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 font-black tracking-wider uppercase px-3 py-1 rounded-full flex items-center gap-1">
+              <Users className="w-3 h-3" /> 2 Seats Available
+            </span>
           )}
         </div>
 
-        <div className="space-y-4">
+        <div className={`grid gap-4 ${isTwoWinnerPosition ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
           {sortedCandidates.map((c, index) => {
             const votes = displayData.votes[c.id] || 0;
-            const isWinner = votes > 0 && index < allowedWinnersCount;
+            const isWinner1 = votes > 0 && index === 0;
+            const isWinner2 = votes > 0 && index === 1 && allowedWinnersCount === 2;
             const name = `${c.firstName} ${c.lastName}`.trim();
             const percentage = totalPosVotes === 0 ? 0 : ((votes / totalPosVotes) * 100).toFixed(1);
 
+            let boxStyle = 'bg-white border-slate-200 hover:border-slate-300';
+            let progressColor = 'bg-[#16345f]';
+            let badge = null;
+
+            if (isWinner1) {
+              boxStyle = 'border-amber-400 bg-amber-50/30 shadow-sm relative overflow-hidden';
+              progressColor = 'bg-amber-500';
+              badge = (
+                <div className="flex items-center gap-1 text-amber-600 font-extrabold text-[10px] tracking-widest uppercase mb-1">
+                  <Award className="w-3 h-3 animate-pulse" /> {isTwoWinnerPosition ? '1ST SEAT' : 'LEADING'}
+                </div>
+              );
+            } else if (isWinner2) {
+              boxStyle = 'border-slate-300 bg-slate-50/50 shadow-sm relative overflow-hidden';
+              progressColor = 'bg-slate-400';
+              badge = (
+                <div className="flex items-center gap-1 text-slate-500 font-extrabold text-[10px] tracking-widest uppercase mb-1">
+                  <Medal className="w-3 h-3" /> 2ND SEAT
+                </div>
+              );
+            }
+
             return (
-              <div 
-                key={c.id} 
-                className={`p-5 rounded-xl border transition-all duration-300 ${
-                  isWinner 
-                    ? 'border-emerald-500/50 bg-emerald-50/20 shadow-sm' 
-                    : 'bg-white border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <div className="flex justify-between items-end gap-4 mb-3">
+              <div key={c.id} className={`p-5 rounded-xl border-2 transition-all duration-300 ${boxStyle}`}>
+                <div className="flex justify-between items-end gap-4 mb-3 relative z-10">
                   <div className="flex-1 min-w-0">
                     <div className="font-extrabold text-lg text-[#16345f] leading-snug truncate">{name}</div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 truncate">{c.partyList || 'INDEPENDENT'}</div>
                   </div>
                   <div className="flex flex-col items-end shrink-0 select-none">
-                    {isWinner ? (
-                      <div className="flex items-center gap-1 text-emerald-600 font-extrabold text-[10px] tracking-widest uppercase mb-1">
-                        <TrendingUp className="w-3 h-3 animate-bounce" /> {isStrandRep ? `TOP ${index + 1}` : 'LEADING'}
-                      </div>
-                    ) : (
-                      <div className="h-4 mb-1"></div>
-                    )}
+                    {badge ? badge : <div className="h-4 mb-1"></div>}
                     <div className="text-3xl font-black text-[#16345f] font-mono tracking-tight leading-none">{votes}</div>
                   </div>
                 </div>
 
-                <div className="mt-1">
-                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        isWinner ? 'bg-emerald-500' : 'bg-[#16345f]'
-                      }`} 
-                      style={{ width: `${percentage}%` }}
-                    />
+                <div className="mt-1 relative z-10">
+                  <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all duration-500 ${progressColor}`} style={{ width: `${percentage}%` }} />
                   </div>
                   <div className="text-[11px] font-extrabold text-slate-400 font-mono text-right tracking-tight mt-1">
                     {percentage}%
@@ -430,7 +423,7 @@ function PublicDashboard({ config, user }) {
     <div className="pb-20 bg-white min-h-screen">
       <div className="bg-[#0f172a] text-white pt-10 pb-32 px-6 md:px-12 relative rounded-b-[2rem] md:rounded-b-[4rem] shadow-2xl">
         <div className="max-w-5xl mx-auto">
-          <div className="inline-flex items-center gap-2 bg-amber-950/40 text-[#c6b26c] border border-amber-800/60 px-3 py-1 rounded-full text-xs font-bold tracking-widest mb-6 font-mono">
+          <div className="inline-flex items-center gap-2 bg-amber-950/40 text-[#c6b26c] border border-amber-800/60 px-3 py-1 rounded-full text-xs font-bold tracking-widest mb-6 font-mono shadow-sm">
             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" /> TRANSMISSION STATUS
           </div>
           <h2 className="text-5xl md:text-7xl font-black tracking-tight mb-4 text-white">Tabulation Board</h2>
@@ -459,7 +452,7 @@ function PublicDashboard({ config, user }) {
                 <h3 className="text-4xl md:text-5xl font-black text-[#16345f] tracking-tighter text-center">Junior High School</h3>
                 <div className="w-24 h-1.5 bg-[#c6b26c] mt-4 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                 {getCouncilPositions('JHS').map(pos => renderCandidatesGroup('JHS', pos))}
               </div>
             </div>
@@ -472,7 +465,7 @@ function PublicDashboard({ config, user }) {
                 <h3 className="text-4xl md:text-5xl font-black text-[#16345f] tracking-tighter text-center">Senior High School</h3>
                 <div className="w-24 h-1.5 bg-[#c6b26c] mt-4 rounded-full shadow-[0_0_15px_rgba(198,178,108,0.5)]"></div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                 {getCouncilPositions('SHS').map(pos => renderCandidatesGroup('SHS', pos))}
               </div>
             </div>
@@ -530,9 +523,9 @@ function LoginScreen({ title, correctHash, onLogin }) {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4">
-      <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md border-t-8 border-[#16345f]">
+      <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md border-t-8 border-[#16345f]">
         <div className="flex justify-center mb-6">
-          <div className="w-16 h-16 bg-[#16345f] rounded-full flex items-center justify-center">
+          <div className="w-16 h-16 bg-[#16345f] rounded-2xl flex items-center justify-center shadow-inner">
             <Lock className="text-[#c6b26c] w-8 h-8" />
           </div>
         </div>
@@ -541,9 +534,9 @@ function LoginScreen({ title, correctHash, onLogin }) {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Passkey</label>
-            <input type="password" value={pass} onChange={e => setPass(e.target.value)} className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-[#16345f] focus:outline-none transition-colors text-lg text-center" autoFocus />
+            <input type="password" value={pass} onChange={e => setPass(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-[#16345f] focus:outline-none transition-colors text-lg text-center" autoFocus />
           </div>
-          <button type="submit" className="w-full bg-[#16345f] hover:bg-[#0b1a30] text-white font-bold py-4 rounded-lg transition-colors uppercase tracking-widest">
+          <button type="submit" className="w-full bg-[#16345f] hover:bg-[#0b1a30] text-white font-bold py-4 rounded-xl shadow-md transition-colors uppercase tracking-widest">
             Authenticate
           </button>
         </form>
@@ -650,7 +643,7 @@ function AdminFirstSetup({ config, addToast }) {
 }
 
 // ============================================================================
-// 3. TABULATION TAB (STRICT CANDIDATE MATCHING)
+// 3. TABULATION TAB (STRICT CANDIDATE MATCHING & COLUMN COMBINING)
 // ============================================================================
 function AdminTabulateTab({ config, addToast, user }) {
   const [candidates, setCandidates] = useState([]);
@@ -713,7 +706,6 @@ function AdminTabulateTab({ config, addToast, user }) {
 
     const columnMappings = [];
     
-    // Improved, strict header matching to prevent candidate mixing
     headers.forEach((h, idx) => {
       const cleanedHeader = h.toLowerCase();
       let matchedPosition = null;
@@ -731,9 +723,8 @@ function AdminTabulateTab({ config, addToast, user }) {
       } else if (cleanedHeader.includes('auditor')) {
         matchedPosition = 'Auditor';
       } else if (cleanedHeader.includes('project manager') || cleanedHeader.includes('project-manager')) {
-        matchedPosition = 'Project Manager';
+        matchedPosition = 'Project Manager'; // Multiple columns containing this will map here
       } else if (cleanedHeader.includes('representative') || cleanedHeader.includes('rep')) {
-        // Look for specific grades to separate reps correctly
         if (cleanedHeader.includes(' 7') || cleanedHeader.includes('seven')) specificGrade = 7;
         else if (cleanedHeader.includes(' 8') || cleanedHeader.includes('eight')) specificGrade = 8;
         else if (cleanedHeader.includes(' 9') || cleanedHeader.includes('nine')) specificGrade = 9;
@@ -741,7 +732,6 @@ function AdminTabulateTab({ config, addToast, user }) {
         else if (cleanedHeader.includes('11') || cleanedHeader.includes('eleven')) specificGrade = 11;
         else if (cleanedHeader.includes('12') || cleanedHeader.includes('twelve')) specificGrade = 12;
         
-        // Look for specific strands
         if (cleanedHeader.includes('abm')) specificStrand = 'ABM';
         else if (cleanedHeader.includes('stem')) specificStrand = 'STEM';
         else if (cleanedHeader.includes('humss')) specificStrand = 'HUMSS';
@@ -752,7 +742,6 @@ function AdminTabulateTab({ config, addToast, user }) {
         } else if (specificStrand) {
           matchedPosition = 'Strand Representative';
         } else {
-          // If totally generic, assume the selected category
           matchedPosition = selectedCategory.council === 'JHS' ? 'Grade Level Representative' : 'Strand Representative';
         }
       }
@@ -782,6 +771,9 @@ function AdminTabulateTab({ config, addToast, user }) {
       if (row.length < columnMappings.length) continue;
 
       rowCount++;
+      
+      // Track votes per position in this specific row to avoid double counting if a voter selected the same person twice
+      const rowVotesForPosition = {};
 
       columnMappings.forEach(mapping => {
         const cellValue = row[mapping.index];
@@ -824,8 +816,6 @@ function AdminTabulateTab({ config, addToast, user }) {
 
           const pCandGrade = mapping.gradeLevel;
           const pCandStrand = mapping.strand;
-
-          // Highly strict unique key to guarantee candidates don't mix up across grades/strands
           const key = `${lastName}_${firstName}_${mapping.position}_${pCandGrade || 'NA'}_${pCandStrand || 'NA'}`.replace(/\s+/g, '_');
 
           if (!detectedCandidatesMap[key]) {
@@ -840,7 +830,11 @@ function AdminTabulateTab({ config, addToast, user }) {
             };
           }
 
-          votesCounter[key] = (votesCounter[key] || 0) + 1;
+          // Prevent double counting if two columns resolve to the same person
+          if (!rowVotesForPosition[key]) {
+            rowVotesForPosition[key] = true;
+            votesCounter[key] = (votesCounter[key] || 0) + 1;
+          }
         });
       });
     }
@@ -1153,12 +1147,13 @@ function AdminCertifiedResultsTab({ user, config }) {
 
           if (cands.length === 0) return null;
 
-          // Directly uses Absolute Votes (voteCount + pendingVotes) instantly bypassing transmission animation!
           const sortedCands = [...cands].sort((a,b) => {
             const absoluteB = (b.voteCount || 0) + (b.pendingVotes || 0);
             const absoluteA = (a.voteCount || 0) + (a.pendingVotes || 0);
             return absoluteB - absoluteA;
           });
+
+          const isTwoWinnerPosition = pos === 'Project Manager' || (council === 'SHS' && pos.endsWith("Representative"));
 
           return (
             <div key={pos} className="space-y-2 border-b border-slate-50 last:border-0 pb-4 last:pb-0">
@@ -1173,9 +1168,9 @@ function AdminCertifiedResultsTab({ user, config }) {
                         <div className="text-[10px] text-slate-400 font-bold tracking-widest mt-0.5 uppercase">{c.partyList || 'INDEPENDENT'}</div>
                       </div>
                       <div className="flex items-center gap-3">
-                        {idx === 0 && <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold border border-emerald-100 px-1.5 py-0.5 rounded">1ST</span>}
-                        {idx === 1 && pos.includes("Representative") && council === 'SHS' && (
-                          <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold border border-emerald-100 px-1.5 py-0.5 rounded">2ND</span>
+                        {idx === 0 && <span className="text-[10px] bg-amber-50 text-amber-700 font-bold border border-amber-200 px-1.5 py-0.5 rounded flex items-center gap-1"><Award className="w-3 h-3"/> 1ST SEAT</span>}
+                        {idx === 1 && isTwoWinnerPosition && (
+                          <span className="text-[10px] bg-slate-100 text-slate-600 font-bold border border-slate-300 px-1.5 py-0.5 rounded flex items-center gap-1"><Medal className="w-3 h-3"/> 2ND SEAT</span>
                         )}
                         <span className="font-mono font-black text-sm bg-slate-100 border px-3 py-1 rounded min-w-[3rem] text-center text-slate-700">
                           {absoluteTotal}
@@ -1671,5 +1666,6 @@ function AdminSetupTab({ config, addToast }) {
     </div>
   );
 }
+
 
 
