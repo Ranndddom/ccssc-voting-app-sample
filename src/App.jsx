@@ -210,7 +210,7 @@ function App() {
           }}
           title="Security Protected Zone"
         >
-          <div className={`w-10 h-10 border-2 border-[#c6b26c] rounded-xl flex items-center justify-center overflow-hidden shadow-sm ${isHome ? 'bg-[#1e293b]' : 'bg-white'}`}>
+          <div className={`w-10 h-10 border-none rounded-xl flex items-center justify-center overflow-hidden shadow-sm ${isHome ? 'bg-[#1e293b]' : 'bg-white'}`}>
             <ShieldCheck className={`w-6 h-6 ${isHome ? 'text-[#c6b26c]' : 'text-[#16345f]'}`} />
           </div>
           <div>
