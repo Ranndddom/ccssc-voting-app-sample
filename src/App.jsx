@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  ShieldAlert, Users, CheckCircle, ShieldCheck,
+  ShieldAlert, Users, CheckCircle,
   Settings, LogOut, Lock, Activity, AlertCircle, X, TrendingUp,
   BarChart3, EyeOff, Eye, StopCircle, Upload, Clipboard, Trash2, PieChart, Award, Medal
 } from 'lucide-react';
@@ -210,8 +210,16 @@ function App() {
           }}
           title="Security Protected Zone"
         >
-          <div className={`w-10 h-10 border-none rounded-xl flex items-center justify-center overflow-hidden shadow-sm ${isHome ? 'bg-[#1e293b]' : 'bg-white'}`}>
-            <ShieldCheck className={`w-6 h-6 ${isHome ? 'text-[#c6b26c]' : 'text-[#16345f]'}`} />
+          <div className={`w-10 h-10 border-2 border-[#c6b26c] rounded-xl flex items-center justify-center overflow-hidden shadow-sm ${isHome ? 'bg-transparent' : 'bg-white p-1'}`}>
+            <img 
+              src="src/assets/logo.png" 
+              alt="Logo" 
+              className="w-full h-full object-contain"
+              onError={(e) => {
+                e.target.onerror = null; 
+                e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c6b26c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 11.08V12a10 10 0 1 1-5.93-9.14'/%3E%3Cpolyline points='22 4 12 14.01 9 11.01'/%3E%3C/svg%3E";
+              }}
+            />
           </div>
           <div>
             <h1 className="font-bold tracking-wider leading-tight text-white text-base md:text-lg">
@@ -325,6 +333,7 @@ function PublicDashboard({ config, user }) {
   const totalBallots = config.totalUploadedBallots || 0;
   const transmittedBallots = displayData.animatedCount;
   const transmissionPercent = totalBallots === 0 ? 0 : Math.round((transmittedBallots / totalBallots) * 100);
+  const isFinished = totalBallots > 0 && transmittedBallots >= totalBallots;
 
   const renderCandidatesGroup = (council, virtualPosition) => {
     const positionCandidates = candidates.filter(c => {
@@ -350,17 +359,18 @@ function PublicDashboard({ config, user }) {
     const allowedWinnersCount = isTwoWinnerPosition ? 2 : 1;
 
     return (
-      <div key={`${council}-${virtualPosition}`} className={`bg-white rounded-3xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all duration-300 ${isTwoWinnerPosition ? 'md:col-span-2 max-w-4xl mx-auto w-full' : ''}`}>
+      <div key={`${council}-${virtualPosition}`} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all duration-300">
         <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
           <h4 className="text-xl font-bold text-[#16345f] tracking-tight">{virtualPosition}</h4>
           {isTwoWinnerPosition && (
-            <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 font-black tracking-wider uppercase px-3 py-1 rounded-full flex items-center gap-1">
+            <span className="text-[10px] bg-[#16345f]/10 text-[#16345f] border border-[#16345f]/20 font-black tracking-wider uppercase px-3 py-1 rounded-full flex items-center gap-1">
               <Users className="w-3 h-3" /> 2 Seats Available
             </span>
           )}
         </div>
 
-        <div className={`grid gap-4 ${isTwoWinnerPosition ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+        {/* Removed multi-column grid logic to keep standard vertical stacking matching other positions */}
+        <div className="space-y-4">
           {sortedCandidates.map((c, index) => {
             const votes = displayData.votes[c.id] || 0;
             const isWinner1 = votes > 0 && index === 0;
@@ -373,21 +383,25 @@ function PublicDashboard({ config, user }) {
             let badge = null;
 
             if (isWinner1) {
-              boxStyle = 'border-amber-400 bg-amber-50/30 shadow-sm relative overflow-hidden';
-              progressColor = 'bg-amber-500';
-              badge = (
-                <div className="flex items-center gap-1 text-amber-600 font-extrabold text-[10px] tracking-widest uppercase mb-1">
-                  <Award className="w-3 h-3 animate-pulse" /> {isTwoWinnerPosition ? '1ST SEAT' : 'LEADING'}
-                </div>
-              );
+              if (isFinished) {
+                boxStyle = 'border-emerald-500 bg-emerald-50/30 shadow-sm relative overflow-hidden';
+                progressColor = 'bg-emerald-500';
+                badge = <div className="flex items-center gap-1 text-emerald-600 font-extrabold text-[10px] tracking-widest uppercase mb-1"><Award className="w-3 h-3" /> {isTwoWinnerPosition ? '1ST SEAT (WINNER)' : 'WINNER'}</div>;
+              } else {
+                boxStyle = 'border-[#c6b26c] bg-[#c6b26c]/10 shadow-sm relative overflow-hidden';
+                progressColor = 'bg-[#c6b26c]';
+                badge = <div className="flex items-center gap-1 text-[#c6b26c] font-extrabold text-[10px] tracking-widest uppercase mb-1"><TrendingUp className="w-3 h-3 animate-pulse" /> {isTwoWinnerPosition ? '1ST SEAT (LEADING)' : 'LEADING'}</div>;
+              }
             } else if (isWinner2) {
-              boxStyle = 'border-slate-300 bg-slate-50/50 shadow-sm relative overflow-hidden';
-              progressColor = 'bg-slate-400';
-              badge = (
-                <div className="flex items-center gap-1 text-slate-500 font-extrabold text-[10px] tracking-widest uppercase mb-1">
-                  <Medal className="w-3 h-3" /> 2ND SEAT
-                </div>
-              );
+              if (isFinished) {
+                boxStyle = 'border-emerald-400 bg-emerald-50/10 shadow-sm relative overflow-hidden';
+                progressColor = 'bg-emerald-400';
+                badge = <div className="flex items-center gap-1 text-emerald-500 font-extrabold text-[10px] tracking-widest uppercase mb-1"><Medal className="w-3 h-3" /> 2ND SEAT (WINNER)</div>;
+              } else {
+                boxStyle = 'border-slate-300 bg-slate-50/50 shadow-sm relative overflow-hidden';
+                progressColor = 'bg-slate-400';
+                badge = <div className="flex items-center gap-1 text-slate-500 font-extrabold text-[10px] tracking-widest uppercase mb-1"><Medal className="w-3 h-3" /> 2ND SEAT</div>;
+              }
             }
 
             return (
@@ -564,7 +578,7 @@ function AdminPortal({ config, addToast, user }) {
             <AdminTab id="tabulate" icon={<Upload/>} label="Forms Tabulator" current={tab} setTab={setTab} />
             <AdminTab id="results" icon={<BarChart3/>} label="Official Results" current={tab} setTab={setTab} />
             <AdminTab id="candidates" icon={<Users/>} label="Candidate Directory" current={tab} setTab={setTab} />
-            <AdminTab id="transmit" icon={<Activity/>} label="Transmission Stream" current={tab} setTab={setTab} />
+            <AdminTab id="transmit" icon={<Activity/>} label="Transmission" current={tab} setTab={setTab} />
             <AdminTab id="setup" icon={<Settings/>} label="Credentials" current={tab} setTab={setTab} />
           </nav>
         </div>
@@ -722,8 +736,8 @@ function AdminTabulateTab({ config, addToast, user }) {
         matchedPosition = 'Treasurer';
       } else if (cleanedHeader.includes('auditor')) {
         matchedPosition = 'Auditor';
-      } else if (cleanedHeader.includes('project manager') || cleanedHeader.includes('project-manager')) {
-        matchedPosition = 'Project Manager'; // Multiple columns containing this will map here
+      } else if ((cleanedHeader.includes('project') && (cleanedHeader.includes('manager') || cleanedHeader.includes('manaher'))) || cleanedHeader.match(/\bpm\b/)) {
+        matchedPosition = 'Project Manager'; // Multiple columns containing this will combine seamlessly
       } else if (cleanedHeader.includes('representative') || cleanedHeader.includes('rep')) {
         if (cleanedHeader.includes(' 7') || cleanedHeader.includes('seven')) specificGrade = 7;
         else if (cleanedHeader.includes(' 8') || cleanedHeader.includes('eight')) specificGrade = 8;
@@ -757,7 +771,7 @@ function AdminTabulateTab({ config, addToast, user }) {
     });
 
     if (columnMappings.length === 0) {
-      addToast("Could not automatically map any headers. Check if columns contain 'President', 'Secretary', 'Representative', etc.", "error");
+      addToast("Could not automatically map any headers. Check if columns contain 'President', 'Secretary', 'Project Manager', etc.", "error");
       return;
     }
 
@@ -830,7 +844,7 @@ function AdminTabulateTab({ config, addToast, user }) {
             };
           }
 
-          // Prevent double counting if two columns resolve to the same person
+          // Prevent double counting if two columns resolve to the same person for the same position
           if (!rowVotesForPosition[key]) {
             rowVotesForPosition[key] = true;
             votesCounter[key] = (votesCounter[key] || 0) + 1;
@@ -1105,7 +1119,7 @@ function AdminTabulateTab({ config, addToast, user }) {
 }
 
 // ============================================================================
-// 4. CERTIFIED RESULTS TAB (IMMEDIATE DB RECORD, NO TRANSMISSION DELAY)
+// 4. CERTIFIED RESULTS TAB
 // ============================================================================
 function AdminCertifiedResultsTab({ user, config }) {
   const [candidates, setCandidates] = useState([]);
@@ -1247,7 +1261,6 @@ function AdminCandidatesTab({ addToast, user }) {
     const breakdown = c.breakdown || {};
     const entries = Object.entries(breakdown).map(([label, value]) => ({label, value})).sort((a,b) => b.value - a.value);
     
-    // Dynamic Conic Gradient calculation for pie chart
     const colors = ['#16345f', '#c6b26c', '#34d399', '#60a5fa', '#fbbf24', '#f87171', '#a78bfa'];
     let currentPercent = 0;
     const totalForPie = entries.reduce((s, e) => s + e.value, 0) || 1;
@@ -1666,6 +1679,4 @@ function AdminSetupTab({ config, addToast }) {
     </div>
   );
 }
-
-
 
