@@ -229,7 +229,7 @@ function App() {
           }}
           title="Security Protected Zone"
         >
-          <div className={`w-10 h-10 border-none rounded-xl flex items-center justify-center overflow-hidden shadow-sm bg-transparent`}>
+          <div className={`w-10 h-10 border-2 border-[#c6b26c] rounded-xl flex items-center justify-center overflow-hidden shadow-sm ${isHome ? 'bg-transparent' : 'bg-white p-1'}`}>
             <img 
               src="src/assets/logo.png" 
               alt="Logo" 
@@ -605,19 +605,20 @@ function TelevisionView({ config, user, setView }) {
     const totalPosVotes = positionCandidates.reduce((sum, c) => sum + (displayData.votes[c.id] || 0), 0);
     const sortedCandidates = [...positionCandidates].sort((a, b) => (displayData.votes[b.id] || 0) - (displayData.votes[a.id] || 0));
     
-    // Only show the top 2 candidates
-    const topCandidates = sortedCandidates.slice(0, 2);
-
-    const isTwoWinnerPosition = virtualPosition === 'Project Manager' || (council === 'SHS' && virtualPosition.endsWith("Representative"));
-    const allowedWinnersCount = isTwoWinnerPosition ? 2 : 1;
+    // Evaluate if the position is Project Manager or an SHS Strand Representative
+    const isMultiWinnerPosition = virtualPosition === 'Project Manager' || (council === 'SHS' && virtualPosition.endsWith("Representative"));
+    const allowedWinnersCount = isMultiWinnerPosition ? 3 : 1;
+    
+    // Specifically slice to 3 for PMs and Strands, otherwise keep as 2 for regular singular positions
+    const topCandidates = sortedCandidates.slice(0, isMultiWinnerPosition ? 3 : 2);
 
     return (
       <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm w-full animate-in fade-in zoom-in-95 duration-500">
         <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
           <h4 className="text-lg font-bold text-[#16345f] tracking-tight">{virtualPosition}</h4>
-          {isTwoWinnerPosition && (
+          {isMultiWinnerPosition && (
             <span className="text-[9px] bg-[#16345f]/10 text-[#16345f] border border-[#16345f]/20 font-black tracking-wider uppercase px-2 py-0.5 rounded-full flex items-center gap-1">
-              <Users className="w-3 h-3" /> 2 Seats Available
+              <Users className="w-3 h-3" /> {allowedWinnersCount} Seats Available
             </span>
           )}
         </div>
@@ -626,7 +627,9 @@ function TelevisionView({ config, user, setView }) {
           {topCandidates.map((c, index) => {
             const votes = displayData.votes[c.id] || 0;
             const isWinner1 = votes > 0 && index === 0;
-            const isWinner2 = votes > 0 && index === 1 && allowedWinnersCount === 2;
+            const isWinner2 = votes > 0 && index === 1 && allowedWinnersCount >= 2;
+            const isWinner3 = votes > 0 && index === 2 && allowedWinnersCount >= 3;
+            
             const name = `${c.firstName} ${c.lastName}`.trim();
             const percentage = totalPosVotes === 0 ? 0 : ((votes / totalPosVotes) * 100).toFixed(1);
 
@@ -638,11 +641,11 @@ function TelevisionView({ config, user, setView }) {
               if (isFinished) {
                 boxStyle = 'border-emerald-500 bg-emerald-50/30 shadow-sm relative overflow-hidden';
                 progressColor = 'bg-emerald-500';
-                badge = <div className="flex items-center gap-1 text-emerald-600 font-extrabold text-[10px] tracking-widest uppercase mb-1"><Award className="w-3 h-3" /> {isTwoWinnerPosition ? '1ST SEAT (WINNER)' : 'WINNER'}</div>;
+                badge = <div className="flex items-center gap-1 text-emerald-600 font-extrabold text-[10px] tracking-widest uppercase mb-1"><Award className="w-3 h-3" /> {isMultiWinnerPosition ? '1ST SEAT (WINNER)' : 'WINNER'}</div>;
               } else {
                 boxStyle = 'border-[#c6b26c] bg-[#c6b26c]/10 shadow-sm relative overflow-hidden';
                 progressColor = 'bg-[#c6b26c]';
-                badge = <div className="flex items-center gap-1 text-[#c6b26c] font-extrabold text-[10px] tracking-widest uppercase mb-1"><TrendingUp className="w-3 h-3 animate-pulse" /> {isTwoWinnerPosition ? '1ST SEAT (LEADING)' : 'LEADING'}</div>;
+                badge = <div className="flex items-center gap-1 text-[#c6b26c] font-extrabold text-[10px] tracking-widest uppercase mb-1"><TrendingUp className="w-3 h-3 animate-pulse" /> {isMultiWinnerPosition ? '1ST SEAT (LEADING)' : 'LEADING'}</div>;
               }
             } else if (isWinner2) {
               if (isFinished) {
@@ -653,6 +656,16 @@ function TelevisionView({ config, user, setView }) {
                 boxStyle = 'border-slate-300 bg-slate-50/50 shadow-sm relative overflow-hidden';
                 progressColor = 'bg-slate-400';
                 badge = <div className="flex items-center gap-1 text-slate-500 font-extrabold text-[10px] tracking-widest uppercase mb-1"><Medal className="w-3 h-3" /> 2ND SEAT</div>;
+              }
+            } else if (isWinner3) {
+              if (isFinished) {
+                boxStyle = 'border-emerald-300 bg-emerald-50/10 shadow-sm relative overflow-hidden';
+                progressColor = 'bg-emerald-300';
+                badge = <div className="flex items-center gap-1 text-emerald-500 font-extrabold text-[10px] tracking-widest uppercase mb-1"><Medal className="w-3 h-3" /> 3RD SEAT (WINNER)</div>;
+              } else {
+                boxStyle = 'border-slate-200 bg-slate-50/30 shadow-sm relative overflow-hidden';
+                progressColor = 'bg-slate-300';
+                badge = <div className="flex items-center gap-1 text-slate-400 font-extrabold text-[10px] tracking-widest uppercase mb-1"><Medal className="w-3 h-3" /> 3RD SEAT</div>;
               }
             }
 
@@ -1995,4 +2008,3 @@ function AdminSetupTab({ config, addToast }) {
     </div>
   );
 }
-
