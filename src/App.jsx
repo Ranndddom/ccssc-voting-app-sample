@@ -607,9 +607,10 @@ function TelevisionView({ config, user, setView }) {
     
     // Evaluate if the position is Project Manager or an SHS Strand Representative
     const isMultiWinnerPosition = virtualPosition === 'Project Manager' || (council === 'SHS' && virtualPosition.endsWith("Representative"));
-    const allowedWinnersCount = isMultiWinnerPosition ? 3 : 1;
+    // Enforce 2 winners only
+    const allowedWinnersCount = isMultiWinnerPosition ? 2 : 1;
     
-    // Specifically slice to 3 for PMs and Strands, otherwise keep as 2 for regular singular positions
+    // Slice to 3 for PMs and Strands to show top 3 candidates (but only 2 will be marked as winners)
     const topCandidates = sortedCandidates.slice(0, isMultiWinnerPosition ? 3 : 2);
 
     return (
@@ -628,7 +629,6 @@ function TelevisionView({ config, user, setView }) {
             const votes = displayData.votes[c.id] || 0;
             const isWinner1 = votes > 0 && index === 0;
             const isWinner2 = votes > 0 && index === 1 && allowedWinnersCount >= 2;
-            const isWinner3 = votes > 0 && index === 2 && allowedWinnersCount >= 3;
             
             const name = `${c.firstName} ${c.lastName}`.trim();
             const percentage = totalPosVotes === 0 ? 0 : ((votes / totalPosVotes) * 100).toFixed(1);
@@ -656,16 +656,6 @@ function TelevisionView({ config, user, setView }) {
                 boxStyle = 'border-slate-300 bg-slate-50/50 shadow-sm relative overflow-hidden';
                 progressColor = 'bg-slate-400';
                 badge = <div className="flex items-center gap-1 text-slate-500 font-extrabold text-[10px] tracking-widest uppercase mb-1"><Medal className="w-3 h-3" /> 2ND SEAT</div>;
-              }
-            } else if (isWinner3) {
-              if (isFinished) {
-                boxStyle = 'border-emerald-300 bg-emerald-50/10 shadow-sm relative overflow-hidden';
-                progressColor = 'bg-emerald-300';
-                badge = <div className="flex items-center gap-1 text-emerald-500 font-extrabold text-[10px] tracking-widest uppercase mb-1"><Medal className="w-3 h-3" /> 3RD SEAT (WINNER)</div>;
-              } else {
-                boxStyle = 'border-slate-200 bg-slate-50/30 shadow-sm relative overflow-hidden';
-                progressColor = 'bg-slate-300';
-                badge = <div className="flex items-center gap-1 text-slate-400 font-extrabold text-[10px] tracking-widest uppercase mb-1"><Medal className="w-3 h-3" /> 3RD SEAT</div>;
               }
             }
 
@@ -2006,5 +1996,5 @@ function AdminSetupTab({ config, addToast }) {
         </div>
       </div>
     </div>
-  );
+  );                    
 }
