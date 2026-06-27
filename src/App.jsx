@@ -210,7 +210,7 @@ function App() {
           }}
           title="Security Protected Zone"
         >
-          <div className={`w-10 h-10 border-none rounded-xl flex items-center justify-center overflow-hidden shadow-sm ${isHome ? 'bg-transparent' : 'bg-white p-1'}`}>
+          <div className={`w-10 h-10 border-none rounded-xl flex items-center justify-center overflow-hidden shadow-sm bg-transparent`}>
             <img 
               src="src/assets/Logo.png" 
               alt="Logo" 
