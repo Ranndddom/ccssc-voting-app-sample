@@ -229,7 +229,7 @@ function App() {
           }}
           title="Security Protected Zone"
         >
-          <div className={`w-10 h-10 border-none rounded-xl flex items-center justify-center overflow-hidden shadow-sm bg-transparent`}>
+          <div className={`w-8 h-8 border-none rounded-xl flex items-center justify-center overflow-hidden shadow-sm bg-transparent`}>
             <img 
               src="src/assets/logo.png" 
               alt="Logo" 
